@@ -3,6 +3,11 @@
 	"description": "LC3 support, including code highlight, autocompletion and static checking",
 	"license": "MIT",
 	"version": "0.0.2",
+	"publisher": "liqi273953932",
+	"repository": {
+		"type": "git",
+		"url": "https://github-dev.cs.illinois.edu/qili8/lc3_vscode"
+	},
 	"categories": [
 		"Programming Languages"
 	],
