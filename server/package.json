@@ -1,0 +1,13 @@
+{
+	"name": "lc3-server",
+	"description": "language server of lc3.",
+	"version": "0.0.1",
+	"license": "MIT",
+	"engines": {
+		"node": "*"
+	},
+	"dependencies": {
+		"vscode-languageserver": "^6.1.1",
+		"vscode-languageserver-textdocument": "^1.0.1"
+	}
+}

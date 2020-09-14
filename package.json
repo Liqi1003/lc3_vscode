@@ -1,0 +1,64 @@
+{
+	"name": "lc3support",
+	"description": "LC3 support, including code highlight, autocompletion and static checking",
+	"license": "MIT",
+	"version": "0.0.2",
+	"categories": [
+		"Programming Languages"
+	],
+	"engines": {
+		"vscode": "^1.43.0"
+	},
+	"activationEvents": [
+		"onLanguage:lc3"
+	],
+	"main": "./client/out/extension",
+	"contributes": {
+		"languages": [
+			{
+				"id": "lc3",
+				"aliases": [
+					"lc3"
+				],
+				"extensions": [
+					".asm"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "lc3",
+				"scopeName": "source.asm",
+				"path": "./syntaxes/lc3.tmLanguage.json"
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "lc3LanguageServer",
+			"properties": {
+				"lc3LanguageServer.enableMultipleLabels": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Controls whether to generate warning when there are multiple labels at the same location."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -b",
+		"watch": "tsc -b -w",
+		"postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
+		"test": "sh ./scripts/e2e.sh"
+	},
+	"devDependencies": {
+		"@types/mocha": "^8.0.3",
+		"mocha": "^8.1.1",
+		"@types/node": "^12.12.0",
+		"eslint": "^6.4.0",
+		"@typescript-eslint/parser": "^2.3.0",
+		"typescript": "^3.9.4"
+	}
+}

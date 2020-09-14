@@ -1,0 +1,105 @@
+{
+	"name": "lc3",
+	"patterns": [
+		{
+			"include": "#keyword"
+		},
+		{
+			"include": "#registers"
+		},
+		{
+			"include": "#constants"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#directives"
+		},
+		{
+			"include": "#comments"
+		}
+	],
+	"repository": {
+		"keyword": {
+			"patterns": [{
+				"name": "keyword.operator.new.lc3",
+				"match": "\\b(LD|LDR|LDI|ST|STR|STI|LEA)\\b"
+			},			
+			{
+				"name": "keyword.operator.new.lc3",
+				"match": "\\b(AND|ADD|NOT)\\b"
+			},
+			{
+				"name": "keyword.control.lc3",
+				"match": "\\bBR[n|N|z|Z|p|P]{0,3}\\b"
+			},
+			{
+				"name": "keyword.control.lc3",
+				"match": "\\b(JMP|JSR|JSRR|RET|RTI)\\b"
+			},
+			{
+				"name": "keyword.control.lc3",
+				"match": "\\b(TRAP|GETC|OUT|PUTS|IN|PUTSP|HALT)\\b"
+			}
+		]
+		},
+
+		"registers": {
+			"patterns": [{
+				"name": "entity.name.variable.lc3",
+				"match": "\\bR[0-7]\\b"
+			}
+		]
+		},
+
+		"constants": {
+			"patterns": [{
+				"name": "constant.numeric.lc3",
+				"match": "\\b[xX]\\h+\\b"
+			},
+			{
+				"name": "constant.numeric.lc3",
+				"match": "#\\d+\\b"
+			},
+			{
+				"name": "constant.numeric.lc3",
+				"match": "\\b\\d+\\b"
+			},
+			{
+				"name": "constant.numeric.lc3",
+				"match": "\\b[01]{8}\\b"
+			}
+		]
+		},
+
+		"strings": {
+			"name": "string.quoted.double.lc3",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.lc3",
+					"match": "\\\\."
+				}
+			]
+		},
+
+		"directives": {
+			"patterns": [{
+				"name": "support.function",
+				"match": "\\.\\w*\\b"
+			}
+		]
+		},
+
+		"comments": {
+			"patterns": [{
+				"name": "comment.lc3",
+				"match": ";.*$"
+			}
+		]
+		}
+	},
+	"scopeName": "source.asm"
+}
