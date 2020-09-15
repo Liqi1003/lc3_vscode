@@ -82,7 +82,6 @@ connection.onInitialized(() => {
 	}
 });
 
-// The example settings
 interface ExtensionSettings {
 	enableMultipleLabels: boolean;
 }
@@ -174,12 +173,14 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 				}
 				break;
 			case "BR":
-				checkPCoffset(textDocument, diagnostics, instruction, code, 9);
-				break;
-			case "JMP":
+				if (0 == checkPCoffset(textDocument, diagnostics, instruction, code, 9)) {
+					checkJumpToData(textDocument, diagnostics, instruction, code);
+				}
 				break;
 			case "JSR":
-				checkPCoffset(textDocument, diagnostics, instruction, code, 11);
+				if (0 == checkPCoffset(textDocument, diagnostics, instruction, code, 11)) {
+					checkJumpToData(textDocument, diagnostics, instruction, code);
+				}
 				break;
 			case "LEA":
 				checkPCoffset(textDocument, diagnostics, instruction, code, 9);
@@ -216,6 +217,18 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 					}
 				}
 				break;
+				case ".BLKW":
+					if (instruction.imm_val_type == '1') {
+						generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Decimal number without #", instruction.line,
+						".BLKW directives view the number as decimal by default. If you meant to write a binary number, add a leading 0; if you \
+						meant to write a decimal number, add a leading #");
+					}
+					checkRunningIntoData(textDocument, diagnostics, instruction, code, idx);
+					break;
+				case ".FILL":
+				case ".STRINGZ":
+					checkRunningIntoData(textDocument, diagnostics, instruction, code, idx);
+					break;
 			default:
 				break;
 		}
@@ -231,7 +244,8 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 	// Label name is number
 	if (is_lc3_number(instruction.mem)) {
 		generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Hardcoded PCoffset.", instruction.line,
-			"Hardcode the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
+			"Hardcoding the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
+			return -2;
 	} else {
 		// Check if offset is within range
 		for (i = 0; i < code.instructions.length; i++) {
@@ -247,8 +261,38 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 		if (i == code.instructions.length) {
 			generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Label not defined.", instruction.line,
 				"The label " + instruction.mem + " is not defined.");
+				return -1;
 		}
 	}
+	return 0;
+}
+
+function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code) {
+	for (let i = 0; i < code.instructions.length; i++) {
+		if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem == instruction.mem) {
+			for(;code.instructions[i].optype == "LABEL"; i++);
+			let next_op = code.instructions[i];
+			if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
+				generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
+					"The destination of this instruction is line " + next_op.line + ", which is data.");
+			}
+			break;
+		}
+	}
+}
+
+function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, idx: number) {
+	do {
+		idx--;
+	} while(code.instructions[idx].optype == "LABEL");
+	if(code.instructions[idx].optype != "BR" && code.instructions[idx].optype != "JSR" && 
+		 code.instructions[idx].optype != "JSRR" && code.instructions[idx].optype != "JMP" && 
+		 code.instructions[idx].optype != "RET" && code.instructions[idx].optype != "HALT" && 
+		 code.instructions[idx].optype != "TRAP") {
+			generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Running into data.", instruction.line,
+				"The program runs into data without necessary Branching/Jumping instructions.");
+		 }
+	
 }
 
 function generateDiagnostics(textDocument: TextDocument, diagnostics: Diagnostic[], severity: DiagnosticSeverity, message: string, line: number, relatedInfo: string) {

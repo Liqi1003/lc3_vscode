@@ -1,6 +1,3 @@
-import { DocumentOnTypeFormattingRequest } from 'vscode-languageserver';
-import { stringify } from 'querystring';
-
 export class Instruction {
 	// Internal variables
 	optype: string;
@@ -55,7 +52,9 @@ export class Instruction {
 				} else {
 					this.incomplete = true;
 				}
-				if (isNaN(this.dest)  || isNaN(this.src1) || isNaN(this.src2) || isNaN(this.imm_val)) {
+				if (isNaN(this.dest)  || isNaN(this.src1) || 
+						(instlst[3][0] == 'R' && isNaN(this.src2)) ||
+						 instlst[3][0] != 'R' && isNaN(this.imm_val)) {
 					this.incomplete = true;
 				}
 				break;
@@ -100,6 +99,7 @@ export class Instruction {
 					this.dest = this.parseValue(instlst[1]);
 					this.src1 = this.parseValue(instlst[2]);
 					this.imm_val = this.parseValue(instlst[3]);
+					this.imm_val_type = instlst[3][0];
 				} else {
 					this.incomplete = true;
 				}
@@ -150,6 +150,7 @@ export class Instruction {
 					this.src1 = this.parseValue(instlst[1]);
 					this.src2 = this.parseValue(instlst[2]);
 					this.imm_val = this.parseValue(instlst[3]);
+					this.imm_val_type = instlst[3][0];
 				} else {
 					this.incomplete = true;
 				}
@@ -160,6 +161,7 @@ export class Instruction {
 			case "TRAP":
 				if (instlst.length >= 2) {
 					this.imm_val = this.parseValue(instlst[1]);
+					this.imm_val_type = instlst[1][0];
 				} else {
 					this.incomplete = true;
 				}
@@ -184,9 +186,20 @@ export class Instruction {
 			case ".END":
 				break;
 			case ".FILL":
+				if (instlst.length >= 2) {
+					if (is_lc3_number(instlst[1])) {
+						this.imm_val = this.parseValue(instlst[1]);
+						this.imm_val_type = instlst[1][0];
+					} else {
+						this.mem = instlst[1];
+					}
+				} else {
+					this.incomplete = true;
+				} 
 				break;
 			case ".BLKW":
 				this.imm_val = this.parseValue(instlst[1]);
+				this.imm_val_type = instlst[1][0];
 				break;
 			case ".STRINGZ":
 				let str = inst.slice(inst.split(' ')[0].length).trim();
@@ -222,6 +235,9 @@ export class Instruction {
 			case 'R':
 				// Register
 				ret = parseInt(val[1]);
+				if (ret > 7) {
+					ret = NaN;
+				}
 				break;
 			case 'X':
 				// Hexadecimal

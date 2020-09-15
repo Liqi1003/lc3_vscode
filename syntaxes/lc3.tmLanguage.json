@@ -24,23 +24,23 @@
 		"keyword": {
 			"patterns": [{
 				"name": "keyword.operator.new.lc3",
-				"match": "\\b(LD|LDR|LDI|ST|STR|STI|LEA)\\b"
+				"match": "\\b(ld|LD|ldr|LDR|ldi|LDI|st|ST|str|STR|sti|STI|lea|LEA)\\b"
 			},			
 			{
 				"name": "keyword.operator.new.lc3",
-				"match": "\\b(AND|ADD|NOT)\\b"
+				"match": "\\b(and|AND|add|ADD|not|NOT)\\b"
 			},
 			{
 				"name": "keyword.control.lc3",
-				"match": "\\bBR[n|N|z|Z|p|P]{0,3}\\b"
+				"match": "\\b(br|BR)[nNzZpP]{0,3}\\b"
 			},
 			{
 				"name": "keyword.control.lc3",
-				"match": "\\b(JMP|JSR|JSRR|RET|RTI)\\b"
+				"match": "\\b(jmp|JMP|jsr|JSR|jsrr|JSRR|ret|RET|rti|RTI)\\b"
 			},
 			{
 				"name": "keyword.control.lc3",
-				"match": "\\b(TRAP|GETC|OUT|PUTS|IN|PUTSP|HALT)\\b"
+				"match": "\\b(trap|TRAP|getc|GETC|out|OUT|puts|PUTS|in|IN|putsp|PUTSP|halt|HALT)\\b"
 			}
 		]
 		},
@@ -48,7 +48,7 @@
 		"registers": {
 			"patterns": [{
 				"name": "entity.name.variable.lc3",
-				"match": "\\bR[0-7]\\b"
+				"match": "\\b[Rr][0-7]\\b"
 			}
 		]
 		},
