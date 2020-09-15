@@ -13,6 +13,7 @@ export class Instruction {
 	imm_val: number;
 	imm_val_type: string;
 	cc: string;
+	incomplete: boolean;
 
 	constructor(inst: string) {
 		// Default values
@@ -26,6 +27,7 @@ export class Instruction {
 		this.imm_val = NaN;
 		this.imm_val_type = "";
 		this.cc = "";
+		this.incomplete = false;
 
 		// Parse instruction
 		let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -41,41 +43,91 @@ export class Instruction {
 			// Basic operations
 			case "ADD":
 			case "AND":
-				this.dest = this.parseValue(instlst[1]);
-				this.src1 = this.parseValue(instlst[2]);
-				if (instlst[3][0] == 'R') {
-					this.src2 = this.parseValue(instlst[3]);
+				if (instlst.length >= 4) {
+					this.dest = this.parseValue(instlst[1]);
+					this.src1 = this.parseValue(instlst[2]);
+					if (instlst[3][0] == 'R') {
+						this.src2 = this.parseValue(instlst[3]);
+					} else {
+						this.imm_val = this.parseValue(instlst[3]);
+						this.imm_val_type = instlst[3][0];
+					}
 				} else {
-					this.imm_val = this.parseValue(instlst[3]);
-					this.imm_val_type = instlst[3][0];
+					this.incomplete = true;
+				}
+				if (isNaN(this.dest)  || isNaN(this.src1) || isNaN(this.src2) || isNaN(this.imm_val)) {
+					this.incomplete = true;
 				}
 				break;
 			case "JMP":
-				this.mem = instlst[1];
+				if (instlst.length >= 2) {
+					this.mem = instlst[1];
+				} else {
+					this.incomplete = true;
+				}
 				break;
 			case "JSR":
-				this.mem = instlst[1];
+				if (instlst.length >= 2) {
+					this.mem = instlst[1];
+				} else {
+					this.incomplete = true;
+				}
 				break;
 			case "JSRR":
-				this.dest = this.parseValue(instlst[1]);
+				if (instlst.length >= 2) {
+					this.dest = this.parseValue(instlst[1]);
+				} else {
+					this.incomplete = true;
+				}
+				if (this.dest == NaN) {
+					this.incomplete = true;
+				}
 				break;
 			case "LD":
 			case "LDI":
-				this.dest = this.parseValue(instlst[1]);
-				this.mem = instlst[2];
+				if (instlst.length >= 3) {
+					this.dest = this.parseValue(instlst[1]);
+					this.mem = instlst[2];
+				} else {
+					this.incomplete = true;
+				}
+				if (this.dest == NaN) {
+					this.incomplete = true;
+				}
 				break;
 			case "LDR":
-				this.dest = this.parseValue(instlst[1]);
-				this.src1 = this.parseValue(instlst[2]);
-				this.imm_val = this.parseValue(instlst[3]);
+				if (instlst.length >= 4) {
+					this.dest = this.parseValue(instlst[1]);
+					this.src1 = this.parseValue(instlst[2]);
+					this.imm_val = this.parseValue(instlst[3]);
+				} else {
+					this.incomplete = true;
+				}
+				if (this.dest == NaN || isNaN(this.src1) || isNaN(this.imm_val)) {
+					this.incomplete = true;
+				}
 				break;
 			case "LEA":
-				this.dest = this.parseValue(instlst[1]);
-				this.imm_val = this.parseValue(instlst[2]);
+				if (instlst.length >= 3) {
+					this.dest = this.parseValue(instlst[1]);
+					this.mem = instlst[2];
+				} else {
+					this.incomplete = true;
+				}
+				if (this.dest == NaN) {
+					this.incomplete = true;
+				}
 				break;
 			case "NOT":
-				this.dest = this.parseValue(instlst[1]);
-				this.src1 = this.parseValue(instlst[2]);
+				if (instlst.length >= 3) {
+					this.dest = this.parseValue(instlst[1]);
+					this.src1 = this.parseValue(instlst[2]);
+				} else {
+					this.incomplete = true;
+				}
+				if (this.dest == NaN || isNaN(this.src1)) {
+					this.incomplete = true;
+				}
 				break;
 			case "RET":
 				this.optype = "RET";
@@ -83,16 +135,34 @@ export class Instruction {
 				break;
 			case "ST":
 			case "STI":
-				this.src1 = this.parseValue(instlst[1]);
-				this.mem = instlst[2];
+				if (instlst.length >= 3) {
+					this.src1 = this.parseValue(instlst[1]);
+					this.mem = instlst[2];
+				} else {
+					this.incomplete = true;
+				}
+				if (isNaN(this.src1)) {
+					this.incomplete = true;
+				}
 				break;
 			case "STR":
-				this.src1 = this.parseValue(instlst[1]);
-				this.src2 = this.parseValue(instlst[2]);
-				this.imm_val = this.parseValue(instlst[3]);
+				if (instlst.length >= 4) {
+					this.src1 = this.parseValue(instlst[1]);
+					this.src2 = this.parseValue(instlst[2]);
+					this.imm_val = this.parseValue(instlst[3]);
+				} else {
+					this.incomplete = true;
+				}
+				if (isNaN(this.src1) || isNaN(this.src2) || isNaN(this.imm_val)) {
+					this.incomplete = true;
+				}
 				break;
 			case "TRAP":
-				this.imm_val = this.parseValue(instlst[1]);
+				if (instlst.length >= 2) {
+					this.imm_val = this.parseValue(instlst[1]);
+				} else {
+					this.incomplete = true;
+				}
 				break;
 			// Frequently used TRAP vectors
 			case "GETC":
@@ -127,10 +197,13 @@ export class Instruction {
 			default:
 				// In case they write nzp in different ways, handle BR here
 				if (this.optype[0] == "B" && this.optype[1] == "R") {
-					this.optype = "BR";
-					this.cc = instlst[0].slice(2);
-					this.mem = instlst[1];
-					this.imm_val = this.parseValue(instlst[1]);
+					if (instlst.length >= 2) {
+						this.optype = "BR";
+						this.cc = instlst[0].slice(2);
+						this.mem = instlst[1];
+					} else {
+						this.incomplete = true;
+					}
 				} else {
 					// LABEL
 					this.optype = "LABEL";
@@ -160,7 +233,11 @@ export class Instruction {
 				break;
 			default:
 				// Binary
-				ret = parseInt(val, 2);
+				if (is_lc3_number(val)) {
+					ret = parseInt(val, 2);
+				} else {
+					ret = NaN;
+				}
 		}
 		return ret;
 	}

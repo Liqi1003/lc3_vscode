@@ -156,6 +156,11 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 				"Code after .END will be ignored.");
 		}
 
+		// Check for incomplete instructions
+		if (instruction.incomplete) {
+			generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Illegal or incomplete instruction.", instruction.line, "");
+		}
+
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
 			case "ADD":
@@ -175,6 +180,9 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 				break;
 			case "JSR":
 				checkPCoffset(textDocument, diagnostics, instruction, code, 11);
+				break;
+			case "LEA":
+				checkPCoffset(textDocument, diagnostics, instruction, code, 9);
 				break;
 			case "LD":
 			case "ST":
