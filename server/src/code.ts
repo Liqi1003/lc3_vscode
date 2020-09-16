@@ -52,9 +52,9 @@ export class Instruction {
 				} else {
 					this.incomplete = true;
 				}
-				if (isNaN(this.dest)  || isNaN(this.src1) || 
-						(instlst[3][0] == 'R' && isNaN(this.src2)) ||
-						 instlst[3][0] != 'R' && isNaN(this.imm_val)) {
+				if (isNaN(this.dest) || isNaN(this.src1) ||
+					(instlst[3][0] == 'R' && isNaN(this.src2)) ||
+					instlst[3][0] != 'R' && isNaN(this.imm_val)) {
 					this.incomplete = true;
 				}
 				break;
@@ -195,7 +195,7 @@ export class Instruction {
 					}
 				} else {
 					this.incomplete = true;
-				} 
+				}
 				break;
 			case ".BLKW":
 				this.imm_val = this.parseValue(instlst[1]);
@@ -266,16 +266,24 @@ export class Code {
 
 	constructor(text: string) {
 		this.instructions = [];
-		this.end_addr = 0;
+		this.end_addr = NaN;
+
+		this.constructInstructions(text);
+
+		this.analyzeSubroutines();
+	}
+
+	constructInstructions(text: string) {
 		let lines = text.split('\n');
 		let line_num = 0;
 		let mem_addr = 0;
 		// Construct each instruction
-		lines.forEach(line => {
+		for (let i = 0; i < lines.length; i++) {
+			let line = lines[i];
 			// Preprocess the line, removing spaces and comments
 			line = line.trim();
 			for (let i = 0; i < line.length; i++) {
-				if (line[0] == ';' || (line[i] == ';' && line[i-1] == ' ')) {
+				if (line[0] == ';' || (line[i] == ';' && line[i - 1] == ' ')) {
 					line = line.slice(0, i);
 				}
 			}
@@ -295,7 +303,7 @@ export class Code {
 					mem_addr += instruction.imm_val - 1;
 				} else if (instruction.optype == ".STRINGZ") {
 					mem_addr += instruction.mem.length;
-					for (let i = 0; i < instruction.mem.length; i++){
+					for (let i = 0; i < instruction.mem.length; i++) {
 						if (instruction.mem[i] == '\\') {
 							mem_addr--;
 						}
@@ -308,7 +316,9 @@ export class Code {
 				this.instructions.push(instruction);
 
 				if (instruction.optype == ".END") {
-					this.end_addr = instruction.mem_addr;
+					if (isNaN(this.end_addr)) {
+						this.end_addr = instruction.mem_addr;
+					}
 				}
 
 				// Handle instructions/directives right behind labels
@@ -334,8 +344,12 @@ export class Code {
 				}
 			}
 			line_num++;
-		});
+		}
 		console.log(this);
+	}
+
+	analyzeSubroutines() {
+		
 	}
 }
 
