@@ -32,7 +32,7 @@ export class Instruction {
 
 		// Parse instruction
 		let instlst = inst.toUpperCase().split(/(\s|,)/);
-		let i;
+		let i: number;
 		// Remove unwanted parts
 		for (i = instlst.length; i > 0; i--) {
 			if (instlst[i] == '' || instlst[i] == ' ' || instlst[i] == '\t' || instlst[i] == ',') {
@@ -282,16 +282,16 @@ export class Code {
 		let lines = text.split('\n');
 		let line_num = 0;
 		let mem_addr = 0;
-		let instruction;
-		let i;
-		let line;
+		let instruction: Instruction;
+		let i: number;
+		let line: string;
 		// Construct each instruction
 		for (i = 0; i < lines.length; i++) {
 			line = lines[i];
 			// Preprocess the line, removing spaces and comments
 			line = line.trim();
 			for (i = 0; i < line.length; i++) {
-				if (line[0] == ';' || (line[i] == ';' && line[i - 1] == ' ')) {
+				if (line[0] == ';' || (line[i] == ';' && (line[i - 1] == ' ' || line[i - 1] == '\t'))) {
 					line = line.slice(0, i);
 				}
 			}
@@ -358,8 +358,8 @@ export class Code {
 
 	analyzeSubroutines() {
 		let target = NaN;
-		let idx, i;
-		let instruction;
+		let idx: number, i: number;
+		let instruction: Instruction;
 		for (idx = 0; idx < this.instructions.length; idx++) {
 			instruction = this.instructions[idx];
 			if (instruction.optype == "JSR") {
@@ -370,7 +370,7 @@ export class Code {
 					}
 				}
 				if (i == this.instructions.length) {
-					// label not found
+					// label not found, give up
 					continue;
 				}
 				for (i = target; i < this.instructions.length; i++) {
