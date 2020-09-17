@@ -294,7 +294,7 @@ export class Code {
         instruction.line = line_num;
 
         // ORIG directive
-        if (instruction.optype == ".ORIG") {
+        if (instruction.optype == ".ORIG" && isNaN(this.end_addr)) {
           mem_addr = instruction.mem_addr;
         }
         // Keep track of memory addresses
@@ -315,10 +315,8 @@ export class Code {
         // Push the instruction into the list
         this.instructions.push(instruction);
 
-        if (instruction.optype == ".END") {
-          if (isNaN(this.end_addr)) {
-            this.end_addr = instruction.mem_addr;
-          }
+        if (instruction.optype == ".END" && isNaN(this.end_addr)) {
+          this.end_addr = instruction.mem_addr;
         }
 
         // Handle instructions/directives right behind labels

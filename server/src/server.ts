@@ -218,7 +218,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
         }
         break;
       case ".BLKW":
-        if (instruction.imm_val_type != '#' && instruction.imm_val_type != '0' && instruction.imm_val_type != 'x' && instruction.imm_val != 1) {
+        if (instruction.imm_val_type != '#' && instruction.imm_val_type != '0' && instruction.imm_val_type != 'X' && instruction.imm_val != 1) {
           generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Decimal number without #", instruction.line,
             ".BLKW directives view the number as decimal by default. If you meant to write a binary number, add a leading 0; if you \
 						meant to write a decimal number, add a leading #.");
