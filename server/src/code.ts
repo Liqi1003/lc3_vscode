@@ -11,6 +11,8 @@ export class Instruction {
 	imm_val_type: string;
 	cc: string;
 	incomplete: boolean;
+	subroutine_num: number;
+	is_subroutine_head: boolean;
 
 	constructor(inst: string) {
 		// Default values
@@ -25,11 +27,14 @@ export class Instruction {
 		this.imm_val_type = "";
 		this.cc = "";
 		this.incomplete = false;
+		this.subroutine_num = 0;
+		this.is_subroutine_head = false;
 
 		// Parse instruction
 		let instlst = inst.toUpperCase().split(/(\s|,)/);
+		let i;
 		// Remove unwanted parts
-		for (let i = instlst.length; i > 0; i--) {
+		for (i = instlst.length; i > 0; i--) {
 			if (instlst[i] == '' || instlst[i] == ' ' || instlst[i] == '\t' || instlst[i] == ',') {
 				instlst.splice(i, 1);
 			}
@@ -270,25 +275,28 @@ export class Code {
 
 		this.constructInstructions(text);
 
-		this.analyzeSubroutines();
+		// this.analyzeSubroutines();
 	}
 
 	constructInstructions(text: string) {
 		let lines = text.split('\n');
 		let line_num = 0;
 		let mem_addr = 0;
+		let instruction;
+		let i;
+		let line;
 		// Construct each instruction
-		for (let i = 0; i < lines.length; i++) {
-			let line = lines[i];
+		for (i = 0; i < lines.length; i++) {
+			line = lines[i];
 			// Preprocess the line, removing spaces and comments
 			line = line.trim();
-			for (let i = 0; i < line.length; i++) {
+			for (i = 0; i < line.length; i++) {
 				if (line[0] == ';' || (line[i] == ';' && line[i - 1] == ' ')) {
 					line = line.slice(0, i);
 				}
 			}
 			if (line) {
-				let instruction = new Instruction(line);
+				instruction = new Instruction(line);
 
 				// Keep track of line numbers
 				instruction.line = line_num;
@@ -303,7 +311,7 @@ export class Code {
 					mem_addr += instruction.imm_val - 1;
 				} else if (instruction.optype == ".STRINGZ") {
 					mem_addr += instruction.mem.length;
-					for (let i = 0; i < instruction.mem.length; i++) {
+					for (i = 0; i < instruction.mem.length; i++) {
 						if (instruction.mem[i] == '\\') {
 							mem_addr--;
 						}
@@ -326,7 +334,7 @@ export class Code {
 					line = line.slice(line.split(" ")[0].length + 1);
 					line = line.trim();
 					if (line) {
-						let instruction = new Instruction(line);
+						instruction = new Instruction(line);
 						// Duplicated code, may refactor if needed
 						instruction.line = line_num;
 						instruction.mem_addr = mem_addr;
@@ -349,7 +357,28 @@ export class Code {
 	}
 
 	analyzeSubroutines() {
-		
+		let target = NaN;
+		let idx, i;
+		let instruction;
+		for (idx = 0; idx < this.instructions.length; idx++) {
+			instruction = this.instructions[idx];
+			if (instruction.optype == "JSR") {
+				for (i = 0; i < this.instructions.length; i++) {
+					if (this.instructions[i].optype == "LABEL" && this.instructions[i].mem == instruction.mem) {
+						target = i;
+						break;
+					}
+				}
+				if (i == this.instructions.length) {
+					// label not found
+					continue;
+				}
+				for (i = target; i < this.instructions.length; i++) {
+					instruction = this.instructions[i];
+					
+				}
+			}
+		}
 	}
 }
 
