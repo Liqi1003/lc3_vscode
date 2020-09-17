@@ -2,4 +2,3 @@ out
 node_modules
 .vscodeignore
 *.vsix
-package-lock.json
