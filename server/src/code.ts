@@ -212,68 +212,68 @@ export class Instruction {
 				this.mem = String(str);
 				break;
 
-			default:
-				// In case they write nzp in different ways, handle BR here
-				if (this.optype[0] == "B" && this.optype[1] == "R") {
-					if (instlst.length >= 2) {
-						this.optype = "BR";
-						this.cc = instlst[0].slice(2);
-						this.mem = instlst[1];
-					} else {
-						this.incomplete = true;
-					}
-				} else {
-					// LABEL
-					this.optype = "LABEL";
-					this.mem = instlst[0];
-				}
-				break;
-		}
-	}
+      default:
+        // In case they write nzp in different ways, handle BR here
+        if (this.optype[0] == "B" && this.optype[1] == "R") {
+          if (instlst.length >= 2) {
+            this.optype = "BR";
+            this.cc = instlst[0].slice(2);
+            this.mem = instlst[1];
+          } else {
+            this.incomplete = true;
+          }
+        } else {
+          // LABEL
+          this.optype = "LABEL";
+          this.mem = instlst[0];
+        }
+        break;
+    }
+  }
 
-	// Helper function to parse values from a string
-	// Possible value type: Register, decimal, hexadecimal, binary
-	parseValue(val: string) {
-		let ret;
-		val = val.trim();
-		switch (val[0]) {
-			case 'R':
-				// Register
-				ret = parseInt(val[1]);
-				if (ret > 7) {
-					ret = NaN;
-				}
-				break;
-			case 'X':
-				// Hexadecimal
-				ret = parseInt(val.slice(1), 16);
-				break;
-			case '#':
-				// Decimal
-				ret = parseInt(val.slice(1), 10);
-				break;
-			default:
-				// Binary
-				if (is_lc3_number(val)) {
-					ret = parseInt(val, 2);
-				} else {
-					ret = NaN;
-				}
-		}
-		return ret;
-	}
+  // Helper function to parse values from a string
+  // Possible value type: Register, decimal, hexadecimal, binary
+  parseValue(val: string) {
+    let ret;
+    val = val.trim();
+    switch (val[0]) {
+      case 'R':
+        // Register
+        ret = parseInt(val[1]);
+        if (ret > 7) {
+          ret = NaN;
+        }
+        break;
+      case 'X':
+        // Hexadecimal
+        ret = parseInt(val.slice(1), 16);
+        break;
+      case '#':
+        // Decimal
+        ret = parseInt(val.slice(1), 10);
+        break;
+      default:
+        // Binary
+        if (is_lc3_number(val)) {
+          ret = parseInt(val, 2);
+        } else {
+          ret = NaN;
+        }
+    }
+    return ret;
+  }
 }
 
 export class Code {
-	// List of instructions
-	instructions: Instruction[];
-	end_addr: number;
+  // List of instructions
+  instructions: Instruction[];
+  end_addr: number;
 
-	constructor(text: string) {
-		this.instructions = [];
-		this.end_addr = NaN;
+  constructor(text: string) {
+    this.instructions = [];
+    this.end_addr = NaN;
 
-		this.constructInstructions(text);
+    this.constructInstructions(text);
 
 		// this.analyzeSubroutines();
 	}
@@ -298,8 +298,8 @@ export class Code {
 			if (line) {
 				instruction = new Instruction(line);
 
-				// Keep track of line numbers
-				instruction.line = line_num;
+        // Keep track of line numbers
+        instruction.line = line_num;
 
 				// ORIG directive
 				if (instruction.optype == ".ORIG") {
@@ -322,16 +322,35 @@ export class Code {
 				}
 				// Push the instruction into the list
 				this.instructions.push(instruction);
+        // ORIG directive
+        if (instruction.optype == ".ORIG" && isNaN(this.end_addr)) {
+          mem_addr = instruction.mem_addr;
+        }
+        // Keep track of memory addresses
+        instruction.mem_addr = mem_addr;
+        if (instruction.optype == ".BLKW") {
+          mem_addr += instruction.imm_val - 1;
+        } else if (instruction.optype == ".STRINGZ") {
+          mem_addr += instruction.mem.length;
+          for (i = 0; i < instruction.mem.length; i++) {
+            if (instruction.mem[i] == '\\') {
+              mem_addr--;
+            }
+          }
+        }
+        if (mem_addr != 0 && instruction.optype != "LABEL" && instruction.optype != ".ORIG") {
+          mem_addr++;
+        }
+        // Push the instruction into the list
+        this.instructions.push(instruction);
 
-				if (instruction.optype == ".END") {
-					if (isNaN(this.end_addr)) {
-						this.end_addr = instruction.mem_addr;
-					}
-				}
+        if (instruction.optype == ".END" && isNaN(this.end_addr)) {
+          this.end_addr = instruction.mem_addr;
+        }
 
 				// Handle instructions/directives right behind labels
 				if (instruction.optype == "LABEL") {
-					line = line.slice(line.split(" ")[0].length + 1);
+					line = line.slice(line.split(/\s/)[0].length + 1);
 					line = line.trim();
 					if (line) {
 						instruction = new Instruction(line);
@@ -383,8 +402,8 @@ export class Code {
 }
 
 export function is_lc3_number(str: string) {
-	let regx = /^[xX][0-9a-f]+$/i;
-	let regb = /^[0-1]+$/;
-	let regd = /^#[0-9]+$/;
-	return str.match(regx) || str.match(regd) || str.match(regb);
+  let regx = /^[xX][0-9a-f]+$/i;
+  let regb = /^[0-1]+$/;
+  let regd = /^#[0-9]+$/;
+  return str.match(regx) || str.match(regd) || str.match(regb);
 }

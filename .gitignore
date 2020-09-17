@@ -1,9 +1,5 @@
 out
 node_modules
-.vscode
-.eslintignore
-.eslintrc.js
-.eslintrc.json
 .vscodeignore
+*.vsix
 package-lock.json
-tsconfig.json
