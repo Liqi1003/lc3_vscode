@@ -11,25 +11,30 @@ export class Instruction {
   imm_val_type: string;
   cc: string;
   incomplete: boolean;
+  subroutine_num: number;
+  improper_subroutine: boolean;
 
   constructor(inst: string) {
     // Default values
     this.optype = "";
     this.mem_addr = NaN;
+    this.mem = "";
     this.line = NaN;
     this.src1 = NaN;
     this.src2 = NaN;
     this.dest = NaN;
-    this.mem = "";
     this.imm_val = NaN;
     this.imm_val_type = "";
     this.cc = "";
     this.incomplete = false;
+    this.subroutine_num = NaN;
+    this.improper_subroutine = false;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
+    let i: number;
     // Remove unwanted parts
-    for (let i = instlst.length; i > 0; i--) {
+    for (i = instlst.length; i > 0; i--) {
       if (instlst[i] == '' || instlst[i] == ' ' || instlst[i] == '\t' || instlst[i] == ',') {
         instlst.splice(i, 1);
       }
@@ -263,10 +268,12 @@ export class Code {
   // List of instructions
   instructions: Instruction[];
   end_addr: number;
+  subroutines: Subroutine[];
 
   constructor(text: string) {
     this.instructions = [];
     this.end_addr = NaN;
+    this.subroutines = [];
 
     this.constructInstructions(text);
 
@@ -277,24 +284,27 @@ export class Code {
     let lines = text.split('\n');
     let line_num = 0;
     let mem_addr = 0;
+    let instruction: Instruction;
+    let idx: number, i: number;
+    let line: string;
     // Construct each instruction
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i];
+    for (idx = 0; idx < lines.length; idx++) {
+      line = lines[idx];
       // Preprocess the line, removing spaces and comments
       line = line.trim();
-      for (let i = 0; i < line.length; i++) {
-        if (line[0] == ';' || (line[i] == ';' && line[i - 1] == ' ')) {
+      for (i = 0; i < line.length; i++) {
+        if (line[0] == ';' || (line[i] == ';' && (line[i - 1] == ' ' || line[i - 1] == '\t'))) {
           line = line.slice(0, i);
         }
       }
       if (line) {
-        let instruction = new Instruction(line);
+        instruction = new Instruction(line);
 
         // Keep track of line numbers
         instruction.line = line_num;
 
         // ORIG directive
-        if (instruction.optype == ".ORIG" && isNaN(this.end_addr)) {
+        if (instruction.optype == ".ORIG") {
           mem_addr = instruction.mem_addr;
         }
         // Keep track of memory addresses
@@ -303,7 +313,7 @@ export class Code {
           mem_addr += instruction.imm_val - 1;
         } else if (instruction.optype == ".STRINGZ") {
           mem_addr += instruction.mem.length;
-          for (let i = 0; i < instruction.mem.length; i++) {
+          for (i = 0; i < instruction.mem.length; i++) {
             if (instruction.mem[i] == '\\') {
               mem_addr--;
             }
@@ -324,7 +334,7 @@ export class Code {
           line = line.slice(line.split(/\s/)[0].length + 1);
           line = line.trim();
           if (line) {
-            let instruction = new Instruction(line);
+            instruction = new Instruction(line);
             // Duplicated code, may refactor if needed
             instruction.line = line_num;
             instruction.mem_addr = mem_addr;
@@ -347,7 +357,69 @@ export class Code {
   }
 
   analyzeSubroutines() {
+    let target = NaN;
+    let idx: number, i: number;
+    let instruction: Instruction;
+    let subroutine: Subroutine;
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if (instruction.optype == "JSR") {
+        for (i = 0; i < this.instructions.length; i++) {
+          if (this.instructions[i].optype == "LABEL" && this.instructions[i].mem == instruction.mem) {
+            target = i;
+            break;
+          }
+        }
 
+        // label not found, give up
+        if (i == this.instructions.length) {
+          continue;
+        }
+
+        // Head of subroutine
+        instruction = this.instructions[i];
+        // Improper subroutine (subroutine inside another subroutine)
+        if (!isNaN(instruction.subroutine_num) &&
+          instruction.subroutine_num != instruction.mem_addr) {
+          instruction.improper_subroutine = true;
+          continue;
+        } else if (instruction.subroutine_num == instruction.mem_addr) {
+          // Have seen this subroutine
+          continue;
+        }
+
+        // Mark all code between subroutine head and RET as a subroutine
+        for (; i < this.instructions.length; i++) {
+          instruction = this.instructions[i];
+          if (!isNaN(instruction.subroutine_num)) {
+            instruction.improper_subroutine = true;
+            break;
+          }
+          instruction.subroutine_num = this.instructions[target].mem_addr;
+
+          // Found the end
+          if (instruction.optype == "RET") {
+            subroutine = new Subroutine(target, i, this.instructions[target].mem_addr, this.instructions[target].mem);
+            this.subroutines.push(subroutine);
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+export class Subroutine {
+  name: string;
+  start: number;
+  end: number;
+  start_addr: number;
+  
+  constructor(start: number, end: number, start_addr: number, name: string) {
+    this.name = name;
+    this.start = start;
+    this.end = end;
+    this.start_addr = start_addr;
   }
 }
 

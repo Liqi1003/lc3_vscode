@@ -20,7 +20,8 @@ import {
 import {
   Code,
   is_lc3_number,
-  Instruction
+  Instruction,
+  Subroutine
 } from './code';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -141,10 +142,12 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 
   // Parse the code
   let code = new Code(textDocument.getText());
+  let idx: number, i: number;
+  let instruction: Instruction;
+
   // Single line of code checkings (not block of codes)
-  for (let idx = 0; idx < code.instructions.length; idx++) {
-    let i;
-    let instruction = code.instructions[idx];
+  for (idx = 0; idx < code.instructions.length; idx++) {
+    instruction = code.instructions[idx];
 
     // Check for code before/after .ORIG/.END
     if (instruction.mem_addr == 0) {
@@ -158,6 +161,14 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     // Check for incomplete instructions
     if (instruction.incomplete) {
       generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Illegal or incomplete instruction.", instruction.line, "");
+    }
+
+    // Check for improper subroutines
+    if (instruction.improper_subroutine) {
+      let outer_subroutine: Instruction;
+      outer_subroutine = findLabelByAddress(code, instruction.subroutine_num);
+      generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Improper subroutine.", instruction.line, 
+      "The subroutine " + instruction.mem + " is contained in the subroutine " + outer_subroutine.mem + ".");
     }
 
     // Checking each line of code based on operation type
@@ -217,6 +228,16 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
           }
         }
         break;
+      case "HALT":
+        if (!isNaN(instruction.subroutine_num)) {
+          generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "HALT inside subroutine.", instruction.line,
+          "You should not let the machine HALT inside a subroutine.");
+        }
+        break;
+      case ".FILL":
+      case ".STRINGZ":
+        checkRunningIntoData(textDocument, diagnostics, instruction, code, idx);
+        break;
       case ".BLKW":
         if (instruction.imm_val_type != '#' && instruction.imm_val_type != '0' && instruction.imm_val_type != 'X' && instruction.imm_val != 1) {
           generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Decimal number without #", instruction.line,
@@ -225,17 +246,69 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
         }
         checkRunningIntoData(textDocument, diagnostics, instruction, code, idx);
         break;
-      case ".FILL":
-      case ".STRINGZ":
-        checkRunningIntoData(textDocument, diagnostics, instruction, code, idx);
-        break;
+      
+      
       default:
         break;
     }
   }
 
+  // Subroutine checks
+  checkSubroutines(textDocument, diagnostics, code);
+
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+function findLabelByAddress(code: Code, address: number) {
+  let i: number;
+  let instruction = new Instruction("");
+  for (i = 0; i < code.instructions.length; i++) {
+    if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem_addr == address) {
+      instruction = code.instructions[i];
+    }
+  }
+  return instruction;
+}
+
+function checkSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
+  let subroutine: Subroutine;
+  let instruction: Instruction;
+  let idx: number, i: number;
+  let save: boolean, restore: boolean;
+  save = false;
+  restore = false;
+
+  for (idx = 0; idx < code.subroutines.length; idx++) {
+    subroutine = code.subroutines[idx];
+    for (i = subroutine.start; i < subroutine.end; i++) {
+      instruction = code.instructions[i];
+      // Find restore R7 code
+      if (instruction.optype == "ST" && instruction.src1 == 7) {
+        save = true;
+        break;
+      } else if (instruction.dest == 7) {
+        break;
+      }
+    }
+
+    for (i = subroutine.end; i > subroutine.start; i--) {
+      instruction = code.instructions[i];
+      // Find restore R7 code
+      if (instruction.optype == "LD" && instruction.dest == 7) {
+        restore = true;
+        break;
+      } else if (instruction.dest == 7) {
+        break;
+      }
+    }
+
+    if (!save || !restore) {
+      generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Not saving and restoring R7 before RET.", code.instructions[subroutine.end].line,
+      "Saving and restoring R7 is almost necessary in any subroutine if you ever used TRAP inside the subroutine. We \
+      recommend you save/restore R7 at all time.");
+    }
+  }
 }
 
 function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, offsetnumber: number) {
@@ -268,10 +341,12 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 }
 
 function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code) {
-  for (let i = 0; i < code.instructions.length; i++) {
+  let i: number;
+  let next_op: Instruction;
+  for (i = 0; i < code.instructions.length; i++) {
     if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem == instruction.mem) {
       for (; code.instructions[i].optype == "LABEL"; i++);
-      let next_op = code.instructions[i];
+      next_op = code.instructions[i];
       if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
         generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
           "The destination of this instruction is line " + next_op.line + ", which is data.");
