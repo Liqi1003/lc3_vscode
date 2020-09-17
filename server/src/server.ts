@@ -217,7 +217,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
           generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Label name is a number.", instruction.line,
             "This label name will be recognized as a number by the assembler, it will not be usable in any other instructions.");
         }
-        if (settings.enableMultipleLabels && code.instructions[idx + 1].optype == "LABEL") {
+        if (settings.enableMultipleLabels && (idx + 1 < code.instructions.length) && (code.instructions[idx + 1].optype == "LABEL")) {
           generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Multiple label at the same memory location.", instruction.line, "");
         }
         for (i = 0; i < instruction.mem.length; i++) {
