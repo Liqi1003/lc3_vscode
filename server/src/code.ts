@@ -321,7 +321,7 @@ export class Code {
 
         // Handle instructions/directives right behind labels
         if (instruction.optype == "LABEL") {
-          line = line.slice(line.split(" ")[0].length + 1);
+          line = line.slice(line.split(/\s/)[0].length + 1);
           line = line.trim();
           if (line) {
             let instruction = new Instruction(line);
