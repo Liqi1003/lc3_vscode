@@ -18,10 +18,12 @@ import {
 } from 'vscode-languageserver-textdocument';
 
 import {
+  TRAPVEC,
   Code,
-  is_lc3_number,
   Instruction,
-  Subroutine
+  Subroutine,
+  is_lc3_number,
+  get_trap_function
 } from './code';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -150,10 +152,10 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     instruction = code.instructions[idx];
 
     // Check for code before/after .ORIG/.END
-    if (instruction.mem_addr == 0) {
+    if (code.has_orig && instruction.mem_addr == 0) {
       generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Code before .ORIG directive.", instruction.line,
         "Code before .ORIG is not allowed.");
-    } else if (instruction.mem_addr > code.end_addr) {
+    } else if (code.has_orig && instruction.mem_addr > code.end_addr) {
       generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Code after .END directive.", instruction.line,
         "Code after .END will be ignored.");
     }
@@ -167,7 +169,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     if (instruction.improper_subroutine) {
       let outer_subroutine: Instruction;
       outer_subroutine = findLabelByAddress(code, instruction.subroutine_num);
-      generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Improper subroutine.", instruction.line, 
+      generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Improper subroutine.", instruction.line, 
       "The subroutine " + instruction.mem + " is contained in the subroutine " + outer_subroutine.mem + ".");
     }
 
@@ -232,6 +234,12 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
         if (!isNaN(instruction.subroutine_num)) {
           generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "HALT inside subroutine.", instruction.line,
           "You should not let the machine HALT inside a subroutine.");
+        }
+        break;
+      case "RET":
+        if (isNaN(instruction.subroutine_num)) {
+          generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "RET outside of subroutine.", instruction.line,
+          "You are executing RET outside of a subroutine. Use 'JMP R7' if you really meant to do that.");
         }
         break;
       case ".FILL":
@@ -349,7 +357,7 @@ function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], 
       next_op = code.instructions[i];
       if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
         generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
-          "The destination of this instruction is line " + next_op.line + ", which is data.");
+          "The destination of this instruction is line " + (next_op.line + 1) + ", which is data.");
       }
       break;
     }
@@ -361,10 +369,9 @@ function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnosti
     idx--;
   } while (code.instructions[idx].optype == "LABEL" || code.instructions[idx].optype == ".FILL" ||
   code.instructions[idx].optype == ".BLKW" || code.instructions[idx].optype == ".STRINGZ");
-  if (code.instructions[idx].optype != "BR" && code.instructions[idx].optype != "JSR" &&
-    code.instructions[idx].optype != "JSRR" && code.instructions[idx].optype != "JMP" &&
+  if (code.instructions[idx].optype != "BR" && code.instructions[idx].optype != "JMP" &&
     code.instructions[idx].optype != "RET" && code.instructions[idx].optype != "HALT" &&
-    code.instructions[idx].optype != "TRAP") {
+    get_trap_function(code.instructions[idx]) != TRAPVEC.HALT) {
     generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Running into data.", instruction.line,
       "The program runs into data without necessary Branching/Jumping instructions.");
   }

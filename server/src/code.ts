@@ -1,3 +1,13 @@
+export enum TRAPVEC {
+  INVALID = 0x0,
+  GETC = 0x20,
+  OUT = 0x21,
+  PUTS = 0x22,
+  IN = 0x23,
+  PUTSP = 0x24,
+  HALT = 0x25
+}
+
 export class Instruction {
   // Internal variables
   optype: string;
@@ -186,7 +196,11 @@ export class Instruction {
         break;
       // Directives
       case ".ORIG":
-        this.mem_addr = this.parseValue(instlst[1]);
+        if (instlst.length >= 2) {
+          this.mem_addr = this.parseValue(instlst[1]);
+        } else {
+          this.incomplete = true;
+        }
         break;
       case ".END":
         break;
@@ -269,11 +283,13 @@ export class Code {
   instructions: Instruction[];
   end_addr: number;
   subroutines: Subroutine[];
+  has_orig: boolean;
 
   constructor(text: string) {
     this.instructions = [];
     this.end_addr = NaN;
     this.subroutines = [];
+    this.has_orig = false;
 
     this.constructInstructions(text);
 
@@ -305,6 +321,7 @@ export class Code {
 
         // ORIG directive
         if (instruction.optype == ".ORIG") {
+          this.has_orig = true;
           mem_addr = instruction.mem_addr;
         }
         // Keep track of memory addresses
@@ -428,4 +445,12 @@ export function is_lc3_number(str: string) {
   let regb = /^[0-1]+$/;
   let regd = /^#[0-9]+$/;
   return str.match(regx) || str.match(regd) || str.match(regb);
+}
+
+export function get_trap_function (instruction: Instruction) {
+  if (instruction.optype != "TRAP") {
+    return TRAPVEC.INVALID;
+  } else {
+    return instruction.imm_val;
+  }
 }
