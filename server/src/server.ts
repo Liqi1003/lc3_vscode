@@ -152,10 +152,10 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     instruction = code.instructions[idx];
 
     // Check for code before/after .ORIG/.END
-    if (code.has_orig && instruction.mem_addr == 0) {
+    if (instruction.mem_addr == 0) {
       generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Error, "Code before .ORIG directive.", instruction.line,
         "Code before .ORIG is not allowed.");
-    } else if (code.has_orig && instruction.mem_addr > code.end_addr) {
+    } else if (instruction.mem_addr > code.end_addr) {
       generateDiagnostics(textDocument, diagnostics, DiagnosticSeverity.Warning, "Code after .END directive.", instruction.line,
         "Code after .END will be ignored.");
     }

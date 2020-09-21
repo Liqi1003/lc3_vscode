@@ -283,13 +283,11 @@ export class Code {
   instructions: Instruction[];
   end_addr: number;
   subroutines: Subroutine[];
-  has_orig: boolean;
 
   constructor(text: string) {
     this.instructions = [];
     this.end_addr = NaN;
     this.subroutines = [];
-    this.has_orig = false;
 
     this.constructInstructions(text);
 
@@ -321,7 +319,6 @@ export class Code {
 
         // ORIG directive
         if (instruction.optype == ".ORIG") {
-          this.has_orig = true;
           mem_addr = instruction.mem_addr;
         }
         // Keep track of memory addresses
