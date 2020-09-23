@@ -12,17 +12,26 @@ export class Instruction {
   // Internal variables
   optype: string;
   mem_addr: number;
+  mem: string;
   line: number;
-  src1: number;
+  src: number;
   src2: number;
   dest: number;
-  mem: string;
   imm_val: number;
   imm_val_type: string;
-  cc: string;
+  n: boolean;
+  z: boolean;
+  p: boolean;
+  is_instruction: boolean;
   incomplete: boolean;
   subroutine_num: number;
   improper_subroutine: boolean;
+  // Added for CFG
+  next_instruction: Instruction | null;
+  br_target: Instruction | null;
+  jsr_target: Instruction | null;
+  // Stack pointer
+  next_stack: Instruction | null;
 
   constructor(inst: string) {
     // Default values
@@ -30,15 +39,22 @@ export class Instruction {
     this.mem_addr = NaN;
     this.mem = "";
     this.line = NaN;
-    this.src1 = NaN;
+    this.src = NaN;
     this.src2 = NaN;
     this.dest = NaN;
     this.imm_val = NaN;
     this.imm_val_type = "";
-    this.cc = "";
+    this.n = false;
+    this.z = false;
+    this.p = false;
     this.incomplete = false;
+    this.is_instruction = true;
     this.subroutine_num = NaN;
     this.improper_subroutine = false;
+    this.next_instruction = null;
+    this.br_target = null;
+    this.jsr_target = null;
+    this.next_stack = null;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -57,7 +73,7 @@ export class Instruction {
       case "AND":
         if (instlst.length >= 4) {
           this.dest = this.parseValue(instlst[1]);
-          this.src1 = this.parseValue(instlst[2]);
+          this.src = this.parseValue(instlst[2]);
           if (instlst[3][0] == 'R') {
             this.src2 = this.parseValue(instlst[3]);
           } else {
@@ -67,9 +83,9 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.dest) || isNaN(this.src1) ||
+        if (isNaN(this.dest) || isNaN(this.src) ||
           (instlst[3][0] == 'R' && isNaN(this.src2)) ||
-          instlst[3][0] != 'R' && isNaN(this.imm_val)) {
+          (instlst[3][0] != 'R' && isNaN(this.imm_val))) {
           this.incomplete = true;
         }
         break;
@@ -112,13 +128,13 @@ export class Instruction {
       case "LDR":
         if (instlst.length >= 4) {
           this.dest = this.parseValue(instlst[1]);
-          this.src1 = this.parseValue(instlst[2]);
+          this.src = this.parseValue(instlst[2]);
           this.imm_val = this.parseValue(instlst[3]);
           this.imm_val_type = instlst[3][0];
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || isNaN(this.src1) || isNaN(this.imm_val)) {
+        if (this.dest == NaN || isNaN(this.src) || isNaN(this.imm_val)) {
           this.incomplete = true;
         }
         break;
@@ -136,40 +152,40 @@ export class Instruction {
       case "NOT":
         if (instlst.length >= 3) {
           this.dest = this.parseValue(instlst[1]);
-          this.src1 = this.parseValue(instlst[2]);
+          this.src = this.parseValue(instlst[2]);
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || isNaN(this.src1)) {
+        if (this.dest == NaN || isNaN(this.src)) {
           this.incomplete = true;
         }
         break;
       case "RET":
         this.optype = "RET";
-        this.src1 = 7;
+        this.src = 7;
         break;
       case "ST":
       case "STI":
         if (instlst.length >= 3) {
-          this.src1 = this.parseValue(instlst[1]);
+          this.src = this.parseValue(instlst[1]);
           this.mem = instlst[2];
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.src1)) {
+        if (isNaN(this.src)) {
           this.incomplete = true;
         }
         break;
       case "STR":
         if (instlst.length >= 4) {
-          this.src1 = this.parseValue(instlst[1]);
+          this.src = this.parseValue(instlst[1]);
           this.src2 = this.parseValue(instlst[2]);
           this.imm_val = this.parseValue(instlst[3]);
           this.imm_val_type = instlst[3][0];
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.src1) || isNaN(this.src2) || isNaN(this.imm_val)) {
+        if (isNaN(this.src) || isNaN(this.src2) || isNaN(this.imm_val)) {
           this.incomplete = true;
         }
         break;
@@ -183,16 +199,33 @@ export class Instruction {
         break;
       // Frequently used TRAP vectors
       case "GETC":
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.GETC;
+        this.dest = 0;
+        break;
       case "IN":
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.IN;
         this.dest = 0;
         break;
       case "OUT":
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.OUT;
+        this.src = 0;
+        break;
       case "PUTS":
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.PUTS;
+        this.src = 0;
+        break;
       case "PUTSP":
-        this.src1 = 0;
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.PUTSP;
+        this.src = 0;
         break;
       case "HALT":
-        this.optype = "HALT";
+        this.optype = "TRAP";
+        this.imm_val = TRAPVEC.HALT;
         break;
       // Directives
       case ".ORIG":
@@ -201,8 +234,10 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
+        this.is_instruction = false;
         break;
       case ".END":
+        this.is_instruction = false;
         break;
       case ".FILL":
         if (instlst.length >= 2) {
@@ -215,15 +250,18 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
+        this.is_instruction = false;
         break;
       case ".BLKW":
         this.imm_val = this.parseValue(instlst[1]);
         this.imm_val_type = instlst[1][0];
+        this.is_instruction = false;
         break;
       case ".STRINGZ":
         let str = inst.slice(inst.split(' ')[0].length).trim();
         str = str.slice(1, str.length - 1);
         this.mem = String(str);
+        this.is_instruction = false;
         break;
 
       default:
@@ -231,7 +269,16 @@ export class Instruction {
         if (this.optype[0] == "B" && this.optype[1] == "R") {
           if (instlst.length >= 2) {
             this.optype = "BR";
-            this.cc = instlst[0].slice(2);
+            let cc = instlst[0].slice(2);
+            this.n = cc.match('N') != null;
+            this.z = cc.match('Z') != null;
+            this.p = cc.match('P') != null;
+            // BR
+            if (!this.n && !this.z && !this.p) {
+              this.n = true;
+              this.z = true;
+              this.p = true;
+            }
             this.mem = instlst[1];
           } else {
             this.incomplete = true;
@@ -240,6 +287,7 @@ export class Instruction {
           // LABEL
           this.optype = "LABEL";
           this.mem = instlst[0];
+          this.is_instruction = false;
         }
         break;
     }
@@ -247,7 +295,7 @@ export class Instruction {
 
   // Helper function to parse values from a string
   // Possible value type: Register, decimal, hexadecimal, binary
-  parseValue(val: string) {
+  parseValue(val: string): number {
     let ret;
     val = val.trim();
     switch (val[0]) {
@@ -279,19 +327,17 @@ export class Instruction {
 }
 
 export class Code {
-  // List of instructions
-  instructions: Instruction[];
+  start_addr: number;
   end_addr: number;
-  subroutines: Subroutine[];
+  instructions: Instruction[];
 
   constructor(text: string) {
-    this.instructions = [];
+    this.start_addr = NaN;
     this.end_addr = NaN;
-    this.subroutines = [];
+    this.instructions = [];
 
     this.constructInstructions(text);
-
-    this.analyzeSubroutines();
+    this.analyzeCFG();
   }
 
   constructInstructions(text: string) {
@@ -301,6 +347,7 @@ export class Code {
     let instruction: Instruction;
     let idx: number, i: number;
     let line: string;
+
     // Construct each instruction
     for (idx = 0; idx < lines.length; idx++) {
       line = lines[idx];
@@ -318,8 +365,9 @@ export class Code {
         instruction.line = line_num;
 
         // ORIG directive
-        if (instruction.optype == ".ORIG") {
+        if (instruction.optype == ".ORIG" && isNaN(this.start_addr)) {
           mem_addr = instruction.mem_addr;
+          this.start_addr = mem_addr;
         }
         // Keep track of memory addresses
         instruction.mem_addr = mem_addr;
@@ -370,81 +418,79 @@ export class Code {
     console.log(this);
   }
 
-  analyzeSubroutines() {
-    let target = NaN;
+  // Build the CFG of the given code
+  analyzeCFG() {
     let idx: number, i: number;
     let instruction: Instruction;
-    let subroutine: Subroutine;
+    let target: Instruction;
+    let next: Instruction;
+
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
+      // Skip data/directives
+      if (instruction.mem_addr == 0 || !instruction.is_instruction) {
+        continue;
+      }
+      // Link instructions
+      for (i = idx + 1; i < this.instructions.length; i++) {
+        if (this.instructions[i].optype != "LABEL" && this.instructions[i].optype != ".END") {
+          instruction.next_instruction = this.instructions[i];
+          break;
+        }
+      }
       if (instruction.optype == "JSR") {
-        for (i = 0; i < this.instructions.length; i++) {
-          if (this.instructions[i].optype == "LABEL" && this.instructions[i].mem == instruction.mem) {
-            target = i;
-            break;
-          }
+        // JSR
+        instruction.jsr_target = this.get_target(idx);
+      } else if (instruction.optype == "BR") {
+        // BR
+        instruction.br_target = this.get_target(idx);
+        if (instruction.n && instruction.z && instruction.p) {
+          instruction.next_instruction = null;
         }
-
-        // label not found, give up
-        if (i == this.instructions.length) {
-          continue;
-        }
-
-        // Head of subroutine
-        instruction = this.instructions[i];
-        // Improper subroutine (subroutine inside another subroutine)
-        if (!isNaN(instruction.subroutine_num) &&
-          instruction.subroutine_num != instruction.mem_addr) {
-          instruction.improper_subroutine = true;
-          continue;
-        } else if (instruction.subroutine_num == instruction.mem_addr) {
-          // Have seen this subroutine
-          continue;
-        }
-
-        // Mark all code between subroutine head and RET as a subroutine
-        for (; i < this.instructions.length; i++) {
-          instruction = this.instructions[i];
-          if (!isNaN(instruction.subroutine_num)) {
-            instruction.improper_subroutine = true;
-            break;
+      } else if (instruction.optype == "RET" ||
+        (instruction.optype == "TRAP" && instruction.imm_val == TRAPVEC.HALT)) {
+        // RET and HALT do not have next_instruction
+        instruction.next_instruction = null;
+      }
+    }
+    // Mark subroutines
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if (instruction.jsr_target != null) {
+        target = instruction.jsr_target;
+        if (isNaN(instruction.jsr_target.subroutine_num)) {
+          for (next = target; next.next_instruction != null; next = next.next_instruction) {
+            next.subroutine_num = target.mem_addr;
           }
-          instruction.subroutine_num = this.instructions[target].mem_addr;
-
-          // Found the end
-          if (instruction.optype == "RET") {
-            subroutine = new Subroutine(target, i, this.instructions[target].mem_addr, this.instructions[target].mem);
-            this.subroutines.push(subroutine);
-            break;
-          }
+        } else {
+          // Improper subroutine
+          target.improper_subroutine = true;
         }
       }
     }
   }
-}
 
-export class Subroutine {
-  name: string;
-  start: number;
-  end: number;
-  start_addr: number;
-  
-  constructor(start: number, end: number, start_addr: number, name: string) {
-    this.name = name;
-    this.start = start;
-    this.end = end;
-    this.start_addr = start_addr;
+  // Get the instruction according to label
+  get_target(idx: number): Instruction | null {
+    let i: number;
+    for (i = 0; i < this.instructions.length; i++) {
+      if (this.instructions[i].optype == "LABEL" && this.instructions[i].mem == this.instructions[idx].mem) {
+        while (i < this.instructions.length && this.instructions[i].optype == "LABEL") { i++; }
+        return this.instructions[i];
+      }
+    }
+    return null;
   }
 }
 
-export function is_lc3_number(str: string) {
-  let regx = /^[xX][0-9a-f]+$/i;
+export function is_lc3_number(str: string): boolean {
+  let regx = /^x[0-9a-f]+$/i;
   let regb = /^[0-1]+$/;
   let regd = /^#[0-9]+$/;
-  return str.match(regx) || str.match(regd) || str.match(regb);
+  return (str.match(regx) != null || str.match(regd) != null || str.match(regb) != null);
 }
 
-export function get_trap_function (instruction: Instruction) {
+export function get_trap_function(instruction: Instruction): TRAPVEC {
   if (instruction.optype != "TRAP") {
     return TRAPVEC.INVALID;
   } else {

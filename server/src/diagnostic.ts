@@ -16,7 +16,6 @@ import {
 	TRAPVEC,
 	Code,
 	Instruction,
-	Subroutine,
 	is_lc3_number,
 	get_trap_function
 } from './code';
@@ -143,7 +142,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	}
 
 	// Subroutine checks
-	checkSubroutines(textDocument, diagnostics, code);
+	// checkSubroutines(textDocument, diagnostics, code);
 	return diagnostics;
 }
 
@@ -158,45 +157,45 @@ function findLabelByAddress(code: Code, address: number) {
 	return instruction;
 }
 
-function checkSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
-	let subroutine: Subroutine;
-	let instruction: Instruction;
-	let idx: number, i: number;
-	let save: boolean, restore: boolean;
-	save = false;
-	restore = false;
+// function checkSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
+// 	let subroutine: Subroutine;
+// 	let instruction: Instruction;
+// 	let idx: number, i: number;
+// 	let save: boolean, restore: boolean;
+// 	save = false;
+// 	restore = false;
 
-	for (idx = 0; idx < code.subroutines.length; idx++) {
-		subroutine = code.subroutines[idx];
-		for (i = subroutine.start; i < subroutine.end; i++) {
-			instruction = code.instructions[i];
-			// Find restore R7 code
-			if (instruction.optype == "ST" && instruction.src1 == 7) {
-				save = true;
-				break;
-			} else if (instruction.dest == 7) {
-				break;
-			}
-		}
+// 	for (idx = 0; idx < code.subroutines.length; idx++) {
+// 		subroutine = code.subroutines[idx];
+// 		for (i = subroutine.start; i < subroutine.end; i++) {
+// 			instruction = code.instructions[i];
+// 			// Find restore R7 code
+// 			if (instruction.optype == "ST" && instruction.src1 == 7) {
+// 				save = true;
+// 				break;
+// 			} else if (instruction.dest == 7) {
+// 				break;
+// 			}
+// 		}
 
-		for (i = subroutine.end; i > subroutine.start; i--) {
-			instruction = code.instructions[i];
-			// Find restore R7 code
-			if (instruction.optype == "LD" && instruction.dest == 7) {
-				restore = true;
-				break;
-			} else if (instruction.dest == 7) {
-				break;
-			}
-		}
+// 		for (i = subroutine.end; i > subroutine.start; i--) {
+// 			instruction = code.instructions[i];
+// 			// Find restore R7 code
+// 			if (instruction.optype == "LD" && instruction.dest == 7) {
+// 				restore = true;
+// 				break;
+// 			} else if (instruction.dest == 7) {
+// 				break;
+// 			}
+// 		}
 
-		if (!save || !restore) {
-			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Not saving and restoring R7 before RET.", code.instructions[subroutine.end].line,
-				"Saving and restoring R7 is almost necessary in any subroutine if you ever used TRAP inside the subroutine. We \
-      recommend you save/restore R7 at all time.");
-		}
-	}
-}
+// 		if (!save || !restore) {
+// 			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Not saving and restoring R7 before RET.", code.instructions[subroutine.end].line,
+// 				"Saving and restoring R7 is almost necessary in any subroutine if you ever used TRAP inside the subroutine. We \
+//       recommend you save/restore R7 at all time.");
+// 		}
+// 	}
+// }
 
 function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, offsetnumber: number) {
 	let i;
