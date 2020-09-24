@@ -207,11 +207,11 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 		return -2;
 	} else {
 		// Check if offset is within range
-		for (i = 0; i < code.instructions.length; i++) {
-			if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem == instruction.mem) {
-				if (instruction.mem_addr - code.instructions[i].mem_addr - 1 < -max || instruction.mem_addr - code.instructions[i].mem_addr > max - 1) {
+		for (i = 0; i < code.labels.length; i++) {
+			if (code.labels[i].name == instruction.mem) {
+				if (instruction.mem_addr - code.labels[i].mem_addr - 1 < -max || instruction.mem_addr - code.instructions[i].mem_addr > max - 1) {
 					generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Error, "PCoffset is too large.", instruction.line,
-						"The PCoffset of this instruction(" + (code.instructions[i].mem_addr - instruction.mem_addr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
+						"The PCoffset of this instruction(" + (code.labels[i].mem_addr - instruction.mem_addr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
 				}
 				break;
 			}
@@ -228,12 +228,13 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 
 function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code) {
 	let i: number;
-	let next_op: Instruction;
+	let next_op: Instruction | null;
 	for (i = 0; i < code.instructions.length; i++) {
-		if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem == instruction.mem) {
-			for (; code.instructions[i].optype == "LABEL"; i++);
-			next_op = code.instructions[i];
-			if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
+		if (code.labels[i].name == instruction.mem) {
+			next_op = code.labels[i].instruction;
+			if (next_op == null) {
+				break;
+			} else if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
 				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
 					"The destination of this instruction is line " + (next_op.line + 1) + ", which is data.");
 			}

@@ -22,9 +22,11 @@ export class Instruction {
   n: boolean;
   z: boolean;
   p: boolean;
-  is_instruction: boolean;
+  is_data: boolean;
   incomplete: boolean;
+  // Subroutine
   subroutine_num: number;
+  is_subroutine_start: boolean;
   improper_subroutine: boolean;
   // Added for CFG
   next_instruction: Instruction | null;
@@ -48,8 +50,9 @@ export class Instruction {
     this.z = false;
     this.p = false;
     this.incomplete = false;
-    this.is_instruction = true;
+    this.is_data = false;
     this.subroutine_num = NaN;
+    this.is_subroutine_start = false;
     this.improper_subroutine = false;
     this.next_instruction = null;
     this.br_target = null;
@@ -234,10 +237,10 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_instruction = false;
+        this.is_data = true;
         break;
       case ".END":
-        this.is_instruction = false;
+        this.is_data = true;
         break;
       case ".FILL":
         if (instlst.length >= 2) {
@@ -250,18 +253,18 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_instruction = false;
+        this.is_data = true;
         break;
       case ".BLKW":
         this.imm_val = this.parseValue(instlst[1]);
         this.imm_val_type = instlst[1][0];
-        this.is_instruction = false;
+        this.is_data = true;
         break;
       case ".STRINGZ":
         let str = inst.slice(inst.split(' ')[0].length).trim();
         str = str.slice(1, str.length - 1);
         this.mem = String(str);
-        this.is_instruction = false;
+        this.is_data = true;
         break;
 
       default:
@@ -287,7 +290,7 @@ export class Instruction {
           // LABEL
           this.optype = "LABEL";
           this.mem = instlst[0];
-          this.is_instruction = false;
+          this.is_data = true;
         }
         break;
     }
@@ -326,24 +329,42 @@ export class Instruction {
   }
 }
 
+export class Label {
+  mem_addr: number;
+  name: string;
+  instruction: Instruction | null;
+
+  constructor(instruction: Instruction) {
+    this.mem_addr = instruction.mem_addr;
+    this.name = instruction.mem;
+    this.instruction = null;
+  }
+}
+
+
 export class Code {
   start_addr: number;
   end_addr: number;
   instructions: Instruction[];
+  labels: Label[];
+  line_num: number;
+  mem_addr: number;
 
   constructor(text: string) {
     this.start_addr = NaN;
     this.end_addr = NaN;
     this.instructions = [];
+    this.labels = [];
+    this.line_num = 0;
+    this.mem_addr = 0;
 
-    this.constructInstructions(text);
+    this.buildInstructions(text);
+    this.linkLabels();
     this.analyzeCFG();
   }
 
-  constructInstructions(text: string) {
+  buildInstructions(text: string) {
     let lines = text.split('\n');
-    let line_num = 0;
-    let mem_addr = 0;
     let instruction: Instruction;
     let idx: number, i: number;
     let line: string;
@@ -360,62 +381,82 @@ export class Code {
       }
       if (line) {
         instruction = new Instruction(line);
-
-        // Keep track of line numbers
-        instruction.line = line_num;
-
-        // ORIG directive
-        if (instruction.optype == ".ORIG" && isNaN(this.start_addr)) {
-          mem_addr = instruction.mem_addr;
-          this.start_addr = mem_addr;
-        }
-        // Keep track of memory addresses
-        instruction.mem_addr = mem_addr;
-        if (instruction.optype == ".BLKW") {
-          mem_addr += instruction.imm_val - 1;
-        } else if (instruction.optype == ".STRINGZ") {
-          mem_addr += instruction.mem.length;
-          for (i = 0; i < instruction.mem.length; i++) {
-            if (instruction.mem[i] == '\\') {
-              mem_addr--;
-            }
-          }
-        }
-        if (mem_addr != 0 && instruction.optype != "LABEL" && instruction.optype != ".ORIG") {
-          mem_addr++;
-        }
-        // Push the instruction into the list
-        this.instructions.push(instruction);
-
-        if (instruction.optype == ".END" && isNaN(this.end_addr)) {
-          this.end_addr = instruction.mem_addr;
-        }
+        this.pushInstruction(instruction);
 
         // Handle instructions/directives right behind labels
         if (instruction.optype == "LABEL") {
-          line = line.slice(line.split(/\s/)[0].length + 1);
-          line = line.trim();
+          line = line.slice(line.split(/\s/)[0].length + 1).trim();
           if (line) {
             instruction = new Instruction(line);
-            // Duplicated code, may refactor if needed
-            instruction.line = line_num;
-            instruction.mem_addr = mem_addr;
-            if (instruction.optype == ".BLKW") {
-              mem_addr += instruction.imm_val - 1;
-            } else if (instruction.optype == ".STRINGZ") {
-              mem_addr += instruction.mem.length;
-            }
-            if (mem_addr != 0 && instruction.optype != "LABEL" && instruction.optype != ".ORIG") {
-              mem_addr++;
-            }
-            // Push the instruction into the list
-            this.instructions.push(instruction);
+            this.pushInstruction(instruction);
           }
         }
       }
-      line_num++;
+      this.line_num++;
     }
     console.log(this);
+  }
+
+  // Push an instruction according to its type (push/not push/push to label)
+  pushInstruction(instruction: Instruction) {
+    let label: Label;
+    let i: number;
+    // Keep track of line numbers
+    instruction.line = this.line_num;
+
+    switch (instruction.optype) {
+      case ".ORIG":
+        this.mem_addr = instruction.mem_addr;
+        this.start_addr = this.mem_addr++;
+        break;
+      case ".END":
+        this.mem_addr = instruction.mem_addr;
+        if (isNaN(this.end_addr)) {
+          this.end_addr = this.mem_addr;
+        }
+      case ".FILL":
+        instruction.mem_addr = this.mem_addr++;
+        this.instructions.push(instruction);
+        break;
+      case ".BLKW":
+        instruction.mem_addr = this.mem_addr++;
+        this.mem_addr += instruction.imm_val - 1;
+        this.instructions.push(instruction);
+        break;
+      case ".STRINGZ":
+        instruction.mem_addr = this.mem_addr++;
+        this.mem_addr += instruction.mem.length;
+        for (i = 0; i < instruction.mem.length; i++) {
+          if (instruction.mem[i] == '\\') {
+            this.mem_addr--;
+          }
+        }
+        this.instructions.push(instruction);
+        break;
+      case "LABEL":
+        instruction.mem_addr = this.mem_addr;
+        label = new Label(instruction);
+        this.labels.push(label);
+        break;
+      default:
+        instruction.mem_addr = this.mem_addr++;
+        this.instructions.push(instruction);
+        break;
+    }
+  }
+
+  linkLabels() {
+    let label_idx: number, instruction_idx: number;
+    // Skip labels and instructions before .ORIG
+    for (label_idx = 0; label_idx < this.labels.length && this.labels[label_idx].mem_addr == 0; label_idx++);
+    for (instruction_idx = 0; instruction_idx < this.instructions.length && this.instructions[instruction_idx].mem_addr == 0; instruction_idx++);
+
+    for (instruction_idx = 0; instruction_idx < this.instructions.length && label_idx < this.labels.length; instruction_idx++) {
+      while (label_idx < this.labels.length && this.instructions[instruction_idx].mem_addr == this.labels[label_idx].mem_addr) {
+        this.labels[label_idx].instruction = this.instructions[instruction_idx];
+        label_idx++;
+      }
+    }
   }
 
   // Build the CFG of the given code
@@ -423,20 +464,16 @@ export class Code {
     let idx: number, i: number;
     let instruction: Instruction;
     let target: Instruction;
-    let next: Instruction;
 
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
-      // Skip data/directives
-      if (instruction.mem_addr == 0 || !instruction.is_instruction) {
+      // Skip data
+      if (instruction.mem_addr == 0 || instruction.is_data) {
         continue;
       }
       // Link instructions
-      for (i = idx + 1; i < this.instructions.length; i++) {
-        if (this.instructions[i].optype != "LABEL" && this.instructions[i].optype != ".END") {
-          instruction.next_instruction = this.instructions[i];
-          break;
-        }
+      if (idx + 1 < this.instructions.length) {
+        instruction.next_instruction = this.instructions[idx + 1];
       }
       if (instruction.optype == "JSR") {
         // JSR
@@ -459,9 +496,7 @@ export class Code {
       if (instruction.jsr_target != null) {
         target = instruction.jsr_target;
         if (isNaN(instruction.jsr_target.subroutine_num)) {
-          for (next = target; next.next_instruction != null; next = next.next_instruction) {
-            next.subroutine_num = target.mem_addr;
-          }
+          target.is_subroutine_start = true;
         } else {
           // Improper subroutine
           target.improper_subroutine = true;
