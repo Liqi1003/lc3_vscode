@@ -9,7 +9,11 @@ import {
   CompletionItemKind,
   TextDocumentPositionParams,
   TextDocumentSyncKind,
-  InitializeResult
+  InitializeResult,
+  CodeActionParams,
+  CodeAction,
+  CodeActionKind,
+  DiagnosticSeverity
 } from 'vscode-languageserver';
 
 import {
@@ -17,7 +21,8 @@ import {
 } from 'vscode-languageserver-textdocument';
 
 import {
-  generateDiagnostics
+  CodeDiagnostics,
+  MESSAGE_POSSIBLE_SUBROUTINE
 } from './diagnostic';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -54,7 +59,8 @@ connection.onInitialize((params: InitializeParams) => {
       // Tell the client that this server supports code completion.
       completionProvider: {
         resolveProvider: true
-      }
+      },
+      codeActionProvider: true
     }
   };
   if (hasWorkspaceFolderCapability) {
@@ -134,14 +140,54 @@ documents.onDidChangeContent(change => {
 
 export async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   // Get the settings of the document
-  let settings = await getDocumentSettings(textDocument.uri);
+  const settings = await getDocumentSettings(textDocument.uri);
 
   // Generate diagnostics
   let diagnostics: Diagnostic[];
-  diagnostics = generateDiagnostics(textDocument, settings);
+  let codeDiagnostics: CodeDiagnostics;
+  codeDiagnostics = new CodeDiagnostics(textDocument);
+  diagnostics = codeDiagnostics.generateDiagnostics(textDocument, settings);
 
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+connection.onCodeAction(provideCodeActions);
+
+export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
+  if (!parms.context.diagnostics.length) {
+    return [];
+  }
+  const document = documents.get(parms.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+  
+  const diagnostics = parms.context.diagnostics;
+  if (!(diagnostics) || diagnostics.length == 0) {
+    return [];
+  }
+  
+  const codeActions: CodeAction[] = [];
+  diagnostics.forEach((diag) => {
+    if (diag.severity === DiagnosticSeverity.Warning && diag.message.includes(MESSAGE_POSSIBLE_SUBROUTINE)) {
+      codeActions.push({
+        title: "Insert a mark to indicate this is a subroutine",
+        kind: CodeActionKind.QuickFix,
+        diagnostics: [diag],
+        edit: {
+          changes: {
+            [parms.textDocument.uri]: [{
+              range: {start: diag.range.start, end: diag.range.start},
+              newText: "; @subroutine\n"
+            }]
+          }
+        }
+      });
+      return;
+    }
+  });
+  return codeActions;
 }
 
 // This handler provides the initial list of the completion items.

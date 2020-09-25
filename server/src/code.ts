@@ -273,14 +273,14 @@ export class Instruction {
       default:
         // BR can be of 8 different kinds, handle here
         if (this.optype[0] == "B" && this.optype[1] == "R") {
+          let cc = instlst[0].slice(2);
+          this.parseCC(cc);
           if (instlst.length >= 2) {
             this.optype = "BR";
-            let cc = instlst[0].slice(2);
-            this.parseCC(cc);
             this.mem = instlst[1];
+          } else if (this.illegal_cc) {
+            this.optype = "BR";
           } else {
-            this.optype = "LABEL";
-            this.mem = instlst[0];
             this.incomplete = true;
           }
         } else {
@@ -378,12 +378,14 @@ export class Label {
   name: string;
   line: number;
   instruction: Instruction | null;
+  isBR: boolean;
 
   constructor(instruction: Instruction) {
     this.mem_addr = instruction.mem_addr;
     this.name = instruction.mem;
     this.line = instruction.line;
     this.instruction = null;
+    this.isBR = false;
   }
 }
 
@@ -403,12 +405,14 @@ export class Code {
     this.instructions = [];
     this.labels = [];
     this.line_num = 0;
-    this.mem_addr = 0;
+    this.mem_addr = NaN;
     this.stack = new Stack<Instruction>();
 
     this.buildInstructions(text);
     this.linkLabels();
     this.analyzeCFG();
+    this.markSubroutines(text);
+    this.analyzeCode();
   }
 
   buildInstructions(text: string) {
@@ -452,30 +456,31 @@ export class Code {
     // Keep track of line numbers
     instruction.line = this.line_num;
 
+    // Handle .ORIG and .END here
+    if (instruction.optype == ".ORIG" && isNaN(this.start_addr)) {
+      this.mem_addr = instruction.mem_addr;
+      this.start_addr = this.mem_addr;
+    } else if (instruction.optype == ".END" && isNaN(this.end_addr)) {
+      this.end_addr = this.mem_addr;
+    } else {
+      instruction.mem_addr = this.mem_addr++;
+    }
+
     switch (instruction.optype) {
       case ".ORIG":
-        this.mem_addr = instruction.mem_addr;
-        this.start_addr = this.mem_addr++;
-        break;
       case ".END":
-        this.mem_addr = instruction.mem_addr;
-        if (isNaN(this.end_addr)) {
-          this.end_addr = this.mem_addr;
-        }
         break;
       case ".FILL":
-        instruction.mem_addr = this.mem_addr++;
         this.instructions.push(instruction);
         break;
       case ".BLKW":
-        instruction.mem_addr = this.mem_addr++;
         this.mem_addr += instruction.imm_val - 1;
         this.instructions.push(instruction);
         break;
       case ".STRINGZ":
-        instruction.mem_addr = this.mem_addr++;
         this.mem_addr += instruction.mem.length;
         for (i = 0; i < instruction.mem.length; i++) {
+          // Take out the '\' characters
           if (instruction.mem[i] == '\\') {
             this.mem_addr--;
           }
@@ -483,27 +488,37 @@ export class Code {
         this.instructions.push(instruction);
         break;
       case "LABEL":
-        instruction.mem_addr = this.mem_addr;
+        // Labels do not occupy memory addresses
+        this.mem_addr--;
         label = new Label(instruction);
         this.labels.push(label);
         break;
+      case "BR":
+        if (instruction.illegal_cc) {
+          label = new Label(instruction);
+          label.isBR = true;
+          this.labels.push(label);
+        }
+        break;
       default:
-        instruction.mem_addr = this.mem_addr++;
         this.instructions.push(instruction);
         break;
     }
   }
 
+  // Link labels with the instruction at that memory location
   linkLabels() {
     let label_idx: number, instruction_idx: number;
     // Skip labels and instructions before .ORIG
     for (label_idx = 0; label_idx < this.labels.length && this.labels[label_idx].mem_addr == 0; label_idx++);
     for (instruction_idx = 0; instruction_idx < this.instructions.length && this.instructions[instruction_idx].mem_addr == 0; instruction_idx++);
 
-    for (instruction_idx = 0; instruction_idx < this.instructions.length && label_idx < this.labels.length; instruction_idx++) {
-      while (label_idx < this.labels.length && this.instructions[instruction_idx].mem_addr == this.labels[label_idx].mem_addr) {
-        this.labels[label_idx].instruction = this.instructions[instruction_idx];
-        label_idx++;
+    // Feeling lazy, may revise the structure here
+    for (instruction_idx = 0; instruction_idx < this.instructions.length; instruction_idx++) {
+      for (label_idx = 0; label_idx < this.labels.length; label_idx++) {
+        if (this.instructions[instruction_idx].mem_addr == this.labels[label_idx].mem_addr){
+          this.labels[label_idx].instruction = this.instructions[instruction_idx];
+        }
       }
     }
   }
@@ -549,7 +564,45 @@ export class Code {
         target.subroutine_num = target.mem_addr;
       }
     }
+  }
 
+  // Mark subroutines according to #pragma
+  markSubroutines(text: string) {
+    let lines = text.split('\n');
+    let idx: number;
+    let line: string;
+    let label: Label;
+
+    // Iterate through all lines except for the last line
+    for (idx = 0; idx < lines.length - 1; idx++) {
+      line = lines[idx];
+      if (line.match("@subroutine")) {
+        label = this.findLabelByLine(idx + 1);
+        if (label.instruction) {
+          label.instruction.is_subroutine_start = true;
+          label.instruction.subroutine_num = label.instruction.mem_addr;
+        }
+      }
+    }
+  }
+
+  findLabelByLine(line: number): Label {
+    let idx: number;
+    let label: Label;
+    for (idx = 0; idx < this.labels.length; idx++) {
+      label = this.labels[idx];
+      if (label.line == line) {
+        return label;
+      }
+    }
+    // Returns an empty label, required by compiler
+    return new Label(new Instruction(""));
+  }
+
+  // Analyze code
+  analyzeCode() {
+    let idx: number;
+    let instruction: Instruction;
     // Analyze main code
     if (this.instructions.length > 0) {
       this.iterate_code(this.instructions[0], NaN);
@@ -558,12 +611,13 @@ export class Code {
     // Analyze subroutines
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
-      if(instruction.is_subroutine_start) {
+      if (instruction.is_subroutine_start) {
         this.iterate_code(instruction, instruction.subroutine_num);
       }
     }
   }
 
+  // Iterate through code to detect unreachable code
   iterate_code(initial_instruction: Instruction, subroutine_num: number) {
     let cur_instruction: Instruction;
     let next_instrcution: Instruction | null;
@@ -574,6 +628,10 @@ export class Code {
     while (!this.stack.isEmpty()) {
       // Pop one instruction
       cur_instruction = this.stack.pop();
+      // Handle RET and HALT
+      if (!isNaN(subroutine_num) && cur_instruction.optype == "RET") {
+
+      }
       // Next instruction
       next_instrcution = cur_instruction.next_instruction;
       if (next_instrcution && !next_instrcution.is_found) {
