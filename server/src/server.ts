@@ -21,7 +21,7 @@ import {
 } from 'vscode-languageserver-textdocument';
 
 import {
-  CodeDiagnostics,
+  generateDiagnostics,
   MESSAGE_POSSIBLE_SUBROUTINE
 } from './diagnostic';
 
@@ -144,9 +144,7 @@ export async function validateTextDocument(textDocument: TextDocument): Promise<
 
   // Generate diagnostics
   let diagnostics: Diagnostic[];
-  let codeDiagnostics: CodeDiagnostics;
-  codeDiagnostics = new CodeDiagnostics(textDocument);
-  diagnostics = codeDiagnostics.generateDiagnostics(textDocument, settings);
+  diagnostics = generateDiagnostics(textDocument, settings);
 
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
