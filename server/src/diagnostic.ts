@@ -27,6 +27,13 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	let code = new Code(textDocument.getText());
 	let idx: number, i: number;
 	let instruction: Instruction;
+	let label_id: number;
+
+	// Check for duplicated labels
+	checkDuplicatedLabels(textDocument, diagnostics, code);
+
+	// Check for unreachable instructions
+	checkUnreachableInstructions(textDocument, diagnostics, code);
 
 	// Single line of code checkings (not block of codes)
 	for (idx = 0; idx < code.instructions.length; idx++) {
@@ -49,9 +56,6 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 		// Check for improper subroutines
 		checkImproperSubroutine(textDocument, diagnostics, code, idx);
 
-		// Check for duplicated labels
-		checkDuplicatedLabels(textDocument, diagnostics, code);
-
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
 			case "ADD":
@@ -65,13 +69,15 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				}
 				break;
 			case "BR":
-				if (0 == checkPCoffset(textDocument, diagnostics, instruction, code, 9)) {
-					checkJumpToData(textDocument, diagnostics, instruction, code);
+				label_id = checkPCoffset(textDocument, diagnostics, instruction, code, 9);
+				if (label_id >= 0) {
+					checkJumpToData(textDocument, diagnostics, instruction, code, label_id);
 				}
 				break;
 			case "JSR":
-				if (0 == checkPCoffset(textDocument, diagnostics, instruction, code, 11)) {
-					checkJumpToData(textDocument, diagnostics, instruction, code);
+				label_id = checkPCoffset(textDocument, diagnostics, instruction, code, 11);
+				if (label_id >= 0) {
+					checkJumpToData(textDocument, diagnostics, instruction, code, label_id);
 				}
 				break;
 			case "LEA":
@@ -155,6 +161,17 @@ function findLabelByAddress(code: Code, address: number) {
 	return instruction;
 }
 
+function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
+	let i: number;
+	let instruction: Instruction;
+	for (i = 0; i < code.instructions.length; i++) {
+		instruction = code.instructions[i];
+		if (!instruction.is_data && !instruction.is_found) {
+			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Code never got executed.", instruction.line, "");
+		}
+	}
+}
+
 function checkDuplicatedLabels(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
 	let i: number, j: number;
 	let label1: Label, label2: Label;
@@ -162,13 +179,12 @@ function checkDuplicatedLabels(textDocument: TextDocument, diagnostics: Diagnost
 		for (j = i + 1; j < code.labels.length; j++) {
 			label1 = code.labels[i];
 			label2 = code.labels[j];
-			if(label1.name == label2.name) {
+			if (label1.name == label2.name) {
 				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Error, "Duplicated labels", label2.line,
-						"The label " + label2.name + " has already appeared in line " + (label1.line + 1) +" .");
+					"The label " + label2.name + " has already appeared in line " + (label1.line + 1) + " .");
 			}
 		}
 	}
-	
 }
 
 function checkImproperSubroutine(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code, idx: number) {
@@ -242,29 +258,25 @@ function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], in
 			}
 		}
 		// Label not found
-		if (i == code.instructions.length) {
+		if (i == code.labels.length) {
 			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Error, "Label not defined.", instruction.line,
 				"The label " + instruction.mem + " is not defined.");
 			return -1;
 		}
 	}
-	return 0;
+	return i;
 }
 
-function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code) {
-	let i: number;
-	let next_op: Instruction | null;
-	for (i = 0; i < code.instructions.length; i++) {
-		if (code.labels[i].name == instruction.mem) {
-			next_op = code.labels[i].instruction;
-			if (next_op == null) {
-				break;
-			} else if (next_op.optype == ".FILL" || next_op.optype == ".BLKW" || next_op.optype == ".STRINGZ") {
-				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
-					"The destination of this instruction is line " + (next_op.line + 1) + ", which is data.");
-			}
-			break;
+function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, idx: number) {
+	let target: Instruction | null;
+	if (idx < code.labels.length) {
+		target = code.labels[idx].instruction;
+		if (target && target.is_data) {
+			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Jumping/Branching to data.", instruction.line,
+				"The destination of this instruction is line " + (target.line + 1) + ", which is data.");
 		}
+	} else {
+		console.error("Tried to access labels[" + idx + "]");
 	}
 }
 

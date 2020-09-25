@@ -1,3 +1,5 @@
+import Stack from "ts-data.stack/stack";
+
 export enum TRAPVEC {
   INVALID = 0x0,
   GETC = 0x20,
@@ -33,8 +35,8 @@ export class Instruction {
   next_instruction: Instruction | null;
   br_target: Instruction | null;
   jsr_target: Instruction | null;
-  // Stack pointer
-  next_stack: Instruction | null;
+  is_found: boolean;
+  is_called: boolean;
 
   constructor(inst: string) {
     // Default values
@@ -59,7 +61,8 @@ export class Instruction {
     this.next_instruction = null;
     this.br_target = null;
     this.jsr_target = null;
-    this.next_stack = null;
+    this.is_found = false;
+    this.is_called = false;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -324,39 +327,43 @@ export class Instruction {
   parseCC(cc: string) {
     switch (cc) {
       case "":
-      case "nzp":
         this.n = true;
         this.z = true;
         this.p = true;
         break;
-      case "n":
+      case "N":
         this.n = true;
         this.z = false;
         this.p = false;
         break;
-      case "z":
+      case "Z":
         this.n = false;
         this.z = true;
         this.p = false;
         break;
-      case "p":
+      case "P":
         this.n = false;
         this.z = false;
         this.p = true;
         break;
-      case "nz":
+      case "NZ":
         this.n = true;
         this.z = true;
         this.p = false;
         break;
-      case "zp":
+      case "ZP":
         this.n = false;
         this.z = true;
         this.p = true;
         break;
-      case "np":
+      case "NP":
         this.n = true;
         this.z = false;
+        this.p = true;
+        break;
+      case "NZP":
+        this.n = true;
+        this.z = true;
         this.p = true;
         break;
       default:
@@ -388,6 +395,7 @@ export class Code {
   labels: Label[];
   line_num: number;
   mem_addr: number;
+  stack: Stack<Instruction>;
 
   constructor(text: string) {
     this.start_addr = NaN;
@@ -396,6 +404,7 @@ export class Code {
     this.labels = [];
     this.line_num = 0;
     this.mem_addr = 0;
+    this.stack = new Stack<Instruction>();
 
     this.buildInstructions(text);
     this.linkLabels();
@@ -530,17 +539,59 @@ export class Code {
         instruction.next_instruction = null;
       }
     }
+
     // Mark subroutines
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
       if (instruction.jsr_target != null) {
         target = instruction.jsr_target;
-        if (isNaN(instruction.jsr_target.subroutine_num)) {
-          target.is_subroutine_start = true;
-        } else {
-          // Improper subroutine
-          target.improper_subroutine = true;
-        }
+        target.is_subroutine_start = true;
+        target.subroutine_num = target.mem_addr;
+      }
+    }
+
+    // Analyze main code
+    if (this.instructions.length > 0) {
+      this.iterate_code(this.instructions[0], NaN);
+    }
+
+    // Analyze subroutines
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if(instruction.is_subroutine_start) {
+        this.iterate_code(instruction, instruction.subroutine_num);
+      }
+    }
+  }
+
+  iterate_code(initial_instruction: Instruction, subroutine_num: number) {
+    let cur_instruction: Instruction;
+    let next_instrcution: Instruction | null;
+
+    this.stack = new Stack<Instruction>();
+    this.stack.push(initial_instruction);
+    initial_instruction.is_found = true;
+    while (!this.stack.isEmpty()) {
+      // Pop one instruction
+      cur_instruction = this.stack.pop();
+      // Next instruction
+      next_instrcution = cur_instruction.next_instruction;
+      if (next_instrcution && !next_instrcution.is_found) {
+        next_instrcution.is_found = true;
+        next_instrcution.subroutine_num = subroutine_num;
+        this.stack.push(next_instrcution);
+      }
+      // Branch target
+      next_instrcution = cur_instruction.br_target;
+      if (next_instrcution && !next_instrcution.is_found) {
+        next_instrcution.is_found = true;
+        next_instrcution.subroutine_num = subroutine_num;
+        this.stack.push(next_instrcution);
+      }
+      // JSR target
+      next_instrcution = cur_instruction.jsr_target;
+      if (next_instrcution && !next_instrcution.is_called) {
+        next_instrcution.is_called = true;
       }
     }
   }

@@ -8,6 +8,7 @@
 	},
 	"dependencies": {
 		"vscode-languageserver": "^6.1.1",
-		"vscode-languageserver-textdocument": "^1.0.1"
+		"vscode-languageserver-textdocument": "^1.0.1",
+		"ts-data.stack": "^1.0.6"
 	}
 }
