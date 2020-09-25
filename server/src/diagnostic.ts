@@ -17,7 +17,7 @@ import {
 	Code,
 	Instruction,
 	is_lc3_number,
-	get_trap_function
+	get_trap_function, Label
 } from './code';
 
 export function generateDiagnostics(textDocument: TextDocument, settings: ExtensionSettings): Diagnostic[] {
@@ -47,12 +47,10 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 		}
 
 		// Check for improper subroutines
-		if (instruction.improper_subroutine) {
-			let outer_subroutine: Instruction;
-			outer_subroutine = findLabelByAddress(code, instruction.subroutine_num);
-			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Improper subroutine.", instruction.line,
-				"The subroutine " + instruction.mem + " is contained in the subroutine " + outer_subroutine.mem + ".");
-		}
+		checkImproperSubroutine(textDocument, diagnostics, code, idx);
+
+		// Check for duplicated labels
+		checkDuplicatedLabels(textDocument, diagnostics, code);
 
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
@@ -155,6 +153,33 @@ function findLabelByAddress(code: Code, address: number) {
 		}
 	}
 	return instruction;
+}
+
+function checkDuplicatedLabels(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
+	let i: number, j: number;
+	let label1: Label, label2: Label;
+	for (i = 0; i < code.labels.length - 1; i++) {
+		for (j = i + 1; j < code.labels.length; j++) {
+			label1 = code.labels[i];
+			label2 = code.labels[j];
+			if(label1.name == label2.name) {
+				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Error, "Duplicated labels", label2.line,
+						"The label " + label2.name + " has already appeared in line " + (label1.line + 1) +" .");
+			}
+		}
+	}
+	
+}
+
+function checkImproperSubroutine(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code, idx: number) {
+	let instruction: Instruction;
+	instruction = code.instructions[idx];
+	if (instruction.improper_subroutine) {
+		let outer_subroutine: Instruction;
+		outer_subroutine = findLabelByAddress(code, instruction.subroutine_num);
+		generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Improper subroutine.", instruction.line,
+			"The subroutine " + instruction.mem + " is contained in the subroutine " + outer_subroutine.mem + ".");
+	}
 }
 
 // function checkSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {

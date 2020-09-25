@@ -22,6 +22,7 @@ export class Instruction {
   n: boolean;
   z: boolean;
   p: boolean;
+  illegal_cc: boolean;
   is_data: boolean;
   incomplete: boolean;
   // Subroutine
@@ -49,6 +50,7 @@ export class Instruction {
     this.n = false;
     this.z = false;
     this.p = false;
+    this.illegal_cc = false;
     this.incomplete = false;
     this.is_data = false;
     this.subroutine_num = NaN;
@@ -237,10 +239,8 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_data = true;
         break;
       case ".END":
-        this.is_data = true;
         break;
       case ".FILL":
         if (instlst.length >= 2) {
@@ -268,29 +268,22 @@ export class Instruction {
         break;
 
       default:
-        // In case they write nzp in different ways, handle BR here
+        // BR can be of 8 different kinds, handle here
         if (this.optype[0] == "B" && this.optype[1] == "R") {
           if (instlst.length >= 2) {
             this.optype = "BR";
             let cc = instlst[0].slice(2);
-            this.n = cc.match('N') != null;
-            this.z = cc.match('Z') != null;
-            this.p = cc.match('P') != null;
-            // BR
-            if (!this.n && !this.z && !this.p) {
-              this.n = true;
-              this.z = true;
-              this.p = true;
-            }
+            this.parseCC(cc);
             this.mem = instlst[1];
           } else {
+            this.optype = "LABEL";
+            this.mem = instlst[0];
             this.incomplete = true;
           }
         } else {
           // LABEL
           this.optype = "LABEL";
           this.mem = instlst[0];
-          this.is_data = true;
         }
         break;
     }
@@ -327,16 +320,62 @@ export class Instruction {
     }
     return ret;
   }
+
+  parseCC(cc: string) {
+    switch (cc) {
+      case "":
+      case "nzp":
+        this.n = true;
+        this.z = true;
+        this.p = true;
+        break;
+      case "n":
+        this.n = true;
+        this.z = false;
+        this.p = false;
+        break;
+      case "z":
+        this.n = false;
+        this.z = true;
+        this.p = false;
+        break;
+      case "p":
+        this.n = false;
+        this.z = false;
+        this.p = true;
+        break;
+      case "nz":
+        this.n = true;
+        this.z = true;
+        this.p = false;
+        break;
+      case "zp":
+        this.n = false;
+        this.z = true;
+        this.p = true;
+        break;
+      case "np":
+        this.n = true;
+        this.z = false;
+        this.p = true;
+        break;
+      default:
+        this.illegal_cc = true;
+        break;
+    }
+  }
 }
 
 export class Label {
   mem_addr: number;
   name: string;
+  line: number;
   instruction: Instruction | null;
 
   constructor(instruction: Instruction) {
     this.mem_addr = instruction.mem_addr;
     this.name = instruction.mem;
+    this.line = instruction.line;
     this.instruction = null;
   }
 }
@@ -414,6 +453,7 @@ export class Code {
         if (isNaN(this.end_addr)) {
           this.end_addr = this.mem_addr;
         }
+        break;
       case ".FILL":
         instruction.mem_addr = this.mem_addr++;
         this.instructions.push(instruction);
@@ -508,10 +548,9 @@ export class Code {
   // Get the instruction according to label
   get_target(idx: number): Instruction | null {
     let i: number;
-    for (i = 0; i < this.instructions.length; i++) {
-      if (this.instructions[i].optype == "LABEL" && this.instructions[i].mem == this.instructions[idx].mem) {
-        while (i < this.instructions.length && this.instructions[i].optype == "LABEL") { i++; }
-        return this.instructions[i];
+    for (i = 0; i < this.labels.length; i++) {
+      if (this.labels[i].name == this.instructions[idx].mem) {
+        return this.labels[i].instruction;
       }
     }
     return null;

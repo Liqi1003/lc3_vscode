@@ -32,7 +32,7 @@
 			},
 			{
 				"name": "keyword.control.lc3",
-				"match": "\\b(br|BR)[nNzZpP]{0,3}\\b"
+				"match": "\\b(br|BR)[nN]?[zZ]?[pP]?\\b"
 			},
 			{
 				"name": "keyword.control.lc3",
