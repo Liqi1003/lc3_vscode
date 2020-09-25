@@ -23,10 +23,10 @@ import {
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
 export function generateDiagnostics(textDocument: TextDocument, settings: ExtensionSettings): Diagnostic[] {
-	let diagnostics: Diagnostic[] = [];
+	const diagnostics: Diagnostic[] = [];
 
 	// Parse the code
-	let code = new Code(textDocument.getText());
+	const code = new Code(textDocument.getText());
 	let idx: number, i: number;
 	let instruction: Instruction;
 	let label_id: number;
@@ -313,7 +313,7 @@ function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnosti
 }
 
 function generateDiagnostic(textDocument: TextDocument, diagnostics: Diagnostic[], severity: DiagnosticSeverity, message: string, line: number, relatedInfo: string) {
-	let diagnostic: Diagnostic = {
+	const diagnostic: Diagnostic = {
 		severity: severity,
 		range: {
 			start: { line: line, character: 0 },

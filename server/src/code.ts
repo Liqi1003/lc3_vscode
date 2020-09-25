@@ -12,31 +12,31 @@ export enum TRAPVEC {
 
 export class Instruction {
   // Internal variables
-  optype: string;
-  mem_addr: number;
-  mem: string;
-  line: number;
-  src: number;
-  src2: number;
-  dest: number;
-  imm_val: number;
-  imm_val_type: string;
-  n: boolean;
-  z: boolean;
-  p: boolean;
-  illegal_cc: boolean;
-  is_data: boolean;
-  incomplete: boolean;
+  public optype: string;
+  public mem_addr: number;
+  public mem: string;
+  public line: number;
+  public src: number;
+  public src2: number;
+  public dest: number;
+  public imm_val: number;
+  public imm_val_type: string;
+  public n: boolean;
+  public z: boolean;
+  public p: boolean;
+  public illegal_cc: boolean;
+  public is_data: boolean;
+  public incomplete: boolean;
   // Subroutine
-  subroutine_num: number;
-  is_subroutine_start: boolean;
-  improper_subroutine: boolean;
+  public subroutine_num: number;
+  public is_subroutine_start: boolean;
+  public improper_subroutine: boolean;
   // Added for CFG
-  next_instruction: Instruction | null;
-  br_target: Instruction | null;
-  jsr_target: Instruction | null;
-  is_found: boolean;
-  is_called: boolean;
+  public next_instruction: Instruction | null;
+  public br_target: Instruction | null;
+  public jsr_target: Instruction | null;
+  public is_found: boolean;
+  public is_called: boolean;
 
   constructor(inst: string) {
     // Default values
@@ -374,11 +374,11 @@ export class Instruction {
 }
 
 export class Label {
-  mem_addr: number;
-  name: string;
-  line: number;
-  instruction: Instruction | null;
-  isBR: boolean;
+  public mem_addr: number;
+  public name: string;
+  public line: number;
+  public instruction: Instruction | null;
+  public isBR: boolean;
 
   constructor(instruction: Instruction) {
     this.mem_addr = instruction.mem_addr;
@@ -391,13 +391,13 @@ export class Label {
 
 
 export class Code {
-  start_addr: number;
-  end_addr: number;
-  instructions: Instruction[];
-  labels: Label[];
-  line_num: number;
-  mem_addr: number;
-  stack: Stack<Instruction>;
+  public start_addr: number;
+  public end_addr: number;
+  public instructions: Instruction[];
+  public labels: Label[];
+  private line_num: number;
+  private mem_addr: number;
+  private stack: Stack<Instruction>;
 
   constructor(text: string) {
     this.start_addr = NaN;
@@ -415,7 +415,7 @@ export class Code {
     this.analyzeCode();
   }
 
-  buildInstructions(text: string) {
+  private buildInstructions(text: string) {
     let lines = text.split('\n');
     let instruction: Instruction;
     let idx: number, i: number;
@@ -450,7 +450,7 @@ export class Code {
   }
 
   // Push an instruction according to its type (push/not push/push to label)
-  pushInstruction(instruction: Instruction) {
+  private pushInstruction(instruction: Instruction) {
     let label: Label;
     let i: number;
     // Keep track of line numbers
@@ -507,7 +507,7 @@ export class Code {
   }
 
   // Link labels with the instruction at that memory location
-  linkLabels() {
+  private linkLabels() {
     let label_idx: number, instruction_idx: number;
     // Skip labels and instructions before .ORIG
     for (label_idx = 0; label_idx < this.labels.length && this.labels[label_idx].mem_addr == 0; label_idx++);
@@ -524,7 +524,7 @@ export class Code {
   }
 
   // Build the CFG of the given code
-  analyzeCFG() {
+  private analyzeCFG() {
     let idx: number, i: number;
     let instruction: Instruction;
     let target: Instruction;
@@ -567,7 +567,7 @@ export class Code {
   }
 
   // Mark subroutines according to #pragma
-  markSubroutines(text: string) {
+  private markSubroutines(text: string) {
     let lines = text.split('\n');
     let idx: number;
     let line: string;
@@ -586,7 +586,7 @@ export class Code {
     }
   }
 
-  findLabelByLine(line: number): Label {
+  private findLabelByLine(line: number): Label {
     let idx: number;
     let label: Label;
     for (idx = 0; idx < this.labels.length; idx++) {
@@ -600,7 +600,7 @@ export class Code {
   }
 
   // Analyze code
-  analyzeCode() {
+  private analyzeCode() {
     let idx: number;
     let instruction: Instruction;
     // Analyze main code
@@ -618,7 +618,7 @@ export class Code {
   }
 
   // Iterate through code to detect unreachable code
-  iterate_code(initial_instruction: Instruction, subroutine_num: number) {
+  private iterate_code(initial_instruction: Instruction, subroutine_num: number) {
     let cur_instruction: Instruction;
     let next_instrcution: Instruction | null;
 
@@ -655,7 +655,7 @@ export class Code {
   }
 
   // Get the instruction according to label
-  get_target(idx: number): Instruction | null {
+  private get_target(idx: number): Instruction | null {
     let i: number;
     for (i = 0; i < this.labels.length; i++) {
       if (this.labels[i].name == this.instructions[idx].mem) {
@@ -667,9 +667,9 @@ export class Code {
 }
 
 export function is_lc3_number(str: string): boolean {
-  let regx = /^x[0-9a-f]+$/i;
-  let regb = /^[0-1]+$/;
-  let regd = /^#[0-9]+$/;
+  const regx = /^x[0-9a-f]+$/i;
+  const regb = /^[0-1]+$/;
+  const regd = /^#[0-9]+$/;
   return (str.match(regx) != null || str.match(regd) != null || str.match(regb) != null);
 }
 

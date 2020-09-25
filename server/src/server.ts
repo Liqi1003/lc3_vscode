@@ -153,19 +153,19 @@ export async function validateTextDocument(textDocument: TextDocument): Promise<
 connection.onCodeAction(provideCodeActions);
 
 export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
-  if (!parms.context.diagnostics.length) {
-    return [];
-  }
+  // Check if document was correctly returned
   const document = documents.get(parms.textDocument.uri);
   if (!document) {
     return [];
   }
   
+  // Check if diagnostics is non-empty
   const diagnostics = parms.context.diagnostics;
   if (!(diagnostics) || diagnostics.length == 0) {
     return [];
   }
   
+  // Find the diagnostics with unused label
   const codeActions: CodeAction[] = [];
   diagnostics.forEach((diag) => {
     if (diag.severity === DiagnosticSeverity.Warning && diag.message.includes(MESSAGE_POSSIBLE_SUBROUTINE)) {
