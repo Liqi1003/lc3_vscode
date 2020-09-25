@@ -181,7 +181,7 @@ function checkUncalledSubroutines(textDocument: TextDocument, diagnostics: Diagn
 	let label: Label;
 	for (i = 0; i < code.labels.length; i++) {
 		label = code.labels[i];
-		if (label.instruction && !label.instruction.is_found) {
+		if (label.instruction && !label.instruction.is_data && !label.instruction.is_found) {
 			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, MESSAGE_POSSIBLE_SUBROUTINE, label.line, 
 			"The code after this label is unreachable. Is this label a subroutine?");
 		}
@@ -257,7 +257,7 @@ function checkImproperSubroutine(textDocument: TextDocument, diagnostics: Diagno
 // 	}
 // }
 
-function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, offsetnumber: number) {
+function checkPCoffset(textDocument: TextDocument, diagnostics: Diagnostic[], instruction: Instruction, code: Code, offsetnumber: number): number {
 	let i;
 	let max = 1 << offsetnumber;
 	// Label name is number

@@ -177,7 +177,7 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
           changes: {
             [parms.textDocument.uri]: [{
               range: {start: diag.range.start, end: diag.range.start},
-              newText: "; @subroutine\n"
+              newText: "; @SUBROUTINE\n"
             }]
           }
         }

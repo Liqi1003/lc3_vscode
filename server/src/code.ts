@@ -316,10 +316,13 @@ export class Instruction {
       default:
         // Binary
         if (is_lc3_number(val)) {
-          ret = parseInt(val, 2);
+          ret = ~~parseInt(val, 2);
         } else {
           ret = NaN;
         }
+    }
+    if ((ret & 0x8000) > 0) {
+      ret = ret - 0x10000;
     }
     return ret;
   }
@@ -498,6 +501,8 @@ export class Code {
           label = new Label(instruction);
           label.isBR = true;
           this.labels.push(label);
+        } else {
+          this.instructions.push(instruction);
         }
         break;
       default:
@@ -576,7 +581,7 @@ export class Code {
     // Iterate through all lines except for the last line
     for (idx = 0; idx < lines.length - 1; idx++) {
       line = lines[idx];
-      if (line.match("@subroutine")) {
+      if (line.match("@SUBROUTINE")) {
         label = this.findLabelByLine(idx + 1);
         if (label.instruction) {
           label.instruction.is_subroutine_start = true;
