@@ -30,13 +30,12 @@ export class Instruction {
   // Subroutine
   public subroutine_num: number;
   public is_subroutine_start: boolean;
-  public improper_subroutine: boolean;
+  public code_overlap: number;
   // Added for CFG
   public next_instruction: Instruction | null;
   public br_target: Instruction | null;
   public jsr_target: Instruction | null;
   public is_found: boolean;
-  public is_called: boolean;
 
   constructor(inst: string) {
     // Default values
@@ -57,12 +56,11 @@ export class Instruction {
     this.is_data = false;
     this.subroutine_num = NaN;
     this.is_subroutine_start = false;
-    this.improper_subroutine = false;
+    this.code_overlap = NaN;
     this.next_instruction = null;
     this.br_target = null;
     this.jsr_target = null;
     this.is_found = false;
-    this.is_called = false;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -521,7 +519,7 @@ export class Code {
     // Feeling lazy, may revise the structure here
     for (instruction_idx = 0; instruction_idx < this.instructions.length; instruction_idx++) {
       for (label_idx = 0; label_idx < this.labels.length; label_idx++) {
-        if (this.instructions[instruction_idx].mem_addr == this.labels[label_idx].mem_addr){
+        if (this.instructions[instruction_idx].mem_addr == this.labels[label_idx].mem_addr) {
           this.labels[label_idx].instruction = this.instructions[instruction_idx];
         }
       }
@@ -532,7 +530,6 @@ export class Code {
   private analyzeCFG() {
     let idx: number, i: number;
     let instruction: Instruction;
-    let target: Instruction;
 
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
@@ -559,26 +556,27 @@ export class Code {
         instruction.next_instruction = null;
       }
     }
-
-    // Mark subroutines
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
-      if (instruction.jsr_target != null) {
-        target = instruction.jsr_target;
-        target.is_subroutine_start = true;
-        target.subroutine_num = target.mem_addr;
-      }
-    }
   }
 
   // Mark subroutines according to #pragma
   private markSubroutines(text: string) {
     let lines = text.split('\n');
     let idx: number;
+    let instruction: Instruction, target: Instruction;
     let line: string;
     let label: Label;
 
-    // Iterate through all lines except for the last line
+    // Mark subroutines with JSR
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if (instruction.jsr_target) {
+        target = instruction.jsr_target;
+        target.is_subroutine_start = true;
+        target.subroutine_num = target.mem_addr;
+      }
+    }
+
+    // Iterate through all lines except for the last line for pragma
     for (idx = 0; idx < lines.length - 1; idx++) {
       line = lines[idx];
       if (line.match("@SUBROUTINE")) {
@@ -610,7 +608,7 @@ export class Code {
     let instruction: Instruction;
     // Analyze main code
     if (this.instructions.length > 0) {
-      this.iterate_code(this.instructions[0], NaN);
+      this.iterate_code(this.instructions[0], this.start_addr);
     }
 
     // Analyze subroutines
@@ -627,35 +625,42 @@ export class Code {
     let cur_instruction: Instruction;
     let next_instrcution: Instruction | null;
 
-    this.stack = new Stack<Instruction>();
-    this.stack.push(initial_instruction);
-    initial_instruction.is_found = true;
+    if (initial_instruction.is_subroutine_start && 
+      initial_instruction.subroutine_num != subroutine_num) {
+      initial_instruction.code_overlap = subroutine_num;
+    } else {
+      initial_instruction.is_found = true;
+      initial_instruction.subroutine_num = subroutine_num;
+      this.stack.push(initial_instruction);
+    }
+
     while (!this.stack.isEmpty()) {
       // Pop one instruction
       cur_instruction = this.stack.pop();
-      // Handle RET and HALT
-      if (!isNaN(subroutine_num) && cur_instruction.optype == "RET") {
-
-      }
       // Next instruction
       next_instrcution = cur_instruction.next_instruction;
-      if (next_instrcution && !next_instrcution.is_found) {
-        next_instrcution.is_found = true;
-        next_instrcution.subroutine_num = subroutine_num;
-        this.stack.push(next_instrcution);
+      if (next_instrcution) {
+        this.pushToStack(next_instrcution, subroutine_num);
       }
       // Branch target
       next_instrcution = cur_instruction.br_target;
-      if (next_instrcution && !next_instrcution.is_found) {
-        next_instrcution.is_found = true;
-        next_instrcution.subroutine_num = subroutine_num;
-        this.stack.push(next_instrcution);
+      if (next_instrcution) {
+        this.pushToStack(next_instrcution, subroutine_num);
       }
-      // JSR target
-      next_instrcution = cur_instruction.jsr_target;
-      if (next_instrcution && !next_instrcution.is_called) {
-        next_instrcution.is_called = true;
-      }
+    }
+  }
+
+  // Do the checking and push one instruction onto stack
+  private pushToStack(instruction: Instruction, subroutine_num: number) {
+    if (instruction.is_subroutine_start) {
+      instruction.code_overlap = subroutine_num;
+    } else if (!instruction.is_found) {
+      instruction.is_found = true;
+      instruction.subroutine_num = subroutine_num;
+      this.stack.push(instruction);
+    } else if (instruction.subroutine_num != subroutine_num) {
+      // Have seen this instruction, check for code overlap
+      instruction.code_overlap = subroutine_num;
     }
   }
 

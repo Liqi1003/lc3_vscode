@@ -38,8 +38,8 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	checkUnreachableInstructions(textDocument, diagnostics, code);
 	checkUncalledSubroutines(textDocument, diagnostics, code);
 
-	// Check for improper subroutines
-	checkImproperSubroutine(textDocument, diagnostics, code);
+	// Check for code overlap
+	checkCodeOverlap(textDocument, diagnostics, code);
 
 	// Single line of code checkings (not block of codes)
 	for (idx = 0; idx < code.instructions.length; idx++) {
@@ -148,23 +148,37 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				break;
 		}
 	}
-
-	// Subroutine checks
-	// checkSubroutines(textDocument, diagnostics, code);
 	return diagnostics;
 }
 
-function findLabelByAddress(code: Code, address: number) {
+function findLabelByAddress(code: Code, address: number): Label {
 	let i: number;
-	let instruction = new Instruction("");
-	for (i = 0; i < code.instructions.length; i++) {
-		if (code.instructions[i].optype == "LABEL" && code.instructions[i].mem_addr == address) {
-			instruction = code.instructions[i];
+	let label = new Label(new Instruction(""));
+	for (i = 0; i < code.labels.length; i++) {
+		if (code.labels[i].mem_addr == address) {
+			label = code.labels[i];
 		}
 	}
-	return instruction;
+	return label;
 }
 
+function checkCodeOverlap(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
+	let i: number;
+	let instruction: Instruction;
+	for (i = 0; i < code.instructions.length; i++) {
+		instruction = code.instructions[i];
+		if (!isNaN(instruction.code_overlap)) {
+			if (instruction.code_overlap == code.start_addr) {
+				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Code overlap between subroutine and main code.", instruction.line,
+					"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and main code.");
+			} else {
+				generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Code overlap between subroutines and main code.", instruction.line,
+					"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and subroutine " +
+					findLabelByAddress(code, instruction.mem_addr).name + ".");
+			}
+		}
+	}
+}
 function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
 	let i: number;
 	let instruction: Instruction;
@@ -203,19 +217,6 @@ function checkDuplicatedLabels(textDocument: TextDocument, diagnostics: Diagnost
 	}
 }
 
-function checkImproperSubroutine(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
-	let i: number;
-	let instruction: Instruction;
-	for (i = 0; i < code.instructions.length; i++) {
-		instruction = code.instructions[i];
-		if (instruction.improper_subroutine) {
-			let outer_subroutine: Instruction;
-			outer_subroutine = findLabelByAddress(code, instruction.subroutine_num);
-			generateDiagnostic(textDocument, diagnostics, DiagnosticSeverity.Warning, "Improper subroutine.", instruction.line,
-				"The subroutine " + instruction.mem + " is contained in the subroutine " + outer_subroutine.mem + ".");
-		}
-	}
-}
 
 // function checkSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], code: Code) {
 // 	let subroutine: Subroutine;
