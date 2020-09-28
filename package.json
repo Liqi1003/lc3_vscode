@@ -42,6 +42,18 @@
 			"type": "object",
 			"title": "lc3LanguageServer",
 			"properties": {
+				"lc3LanguageServer.showWarnings": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Controls whether to show warnings."
+				},
+				"lc3LanguageServer.showErrors": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Controls whether to show errors."
+				},
 				"lc3LanguageServer.enableMultipleLabels": {
 					"scope": "resource",
 					"type": "boolean",

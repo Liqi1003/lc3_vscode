@@ -86,13 +86,19 @@ connection.onInitialized(() => {
 });
 
 export interface ExtensionSettings {
+  showWarnings: boolean;
+  showErrors: boolean;
   enableMultipleLabels: boolean;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings: ExtensionSettings = { enableMultipleLabels: true };
+const defaultSettings: ExtensionSettings = {
+  showWarnings: true,
+  showErrors: true,
+  enableMultipleLabels: true
+};
 let globalSettings: ExtensionSettings = defaultSettings;
 
 // Cache the settings of all open documents
@@ -158,13 +164,13 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
   if (!document) {
     return [];
   }
-  
+
   // Check if diagnostics is non-empty
   const diagnostics = parms.context.diagnostics;
   if (!(diagnostics) || diagnostics.length == 0) {
     return [];
   }
-  
+
   // Find the diagnostics with unused label
   const codeActions: CodeAction[] = [];
   diagnostics.forEach((diag) => {
@@ -176,7 +182,7 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
         edit: {
           changes: {
             [parms.textDocument.uri]: [{
-              range: {start: diag.range.start, end: diag.range.start},
+              range: { start: diag.range.start, end: diag.range.start },
               newText: "; @SUBROUTINE\n"
             }]
           }
