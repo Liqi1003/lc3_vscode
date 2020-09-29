@@ -1,10 +1,10 @@
-import Stack from "ts-data.stack/stack";
+import Stack from 'ts-data.stack/stack';
 
 import {
   TRAPVEC,
   Instruction,
   Label
-} from "./instruction"
+} from './instruction'
 
 export class Code {
   public start_addr: number;

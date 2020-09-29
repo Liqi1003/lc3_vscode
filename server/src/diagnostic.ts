@@ -22,7 +22,7 @@ import {
 	Label,
 	is_lc3_number,
 	get_trap_function
-} from "./instruction"
+} from './instruction'
 
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
