@@ -13,12 +13,16 @@ import {
 } from './server';
 
 import {
-	TRAPVEC,
-	Code,
-	Instruction,
-	is_lc3_number,
-	get_trap_function, Label
+	Code
 } from './code';
+
+import {
+  TRAPVEC,
+  Instruction,
+	Label,
+	is_lc3_number,
+	get_trap_function
+} from './instruction'
 
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
@@ -49,7 +53,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 		if (instruction.mem_addr == 0) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, "Code before .ORIG directive.", instruction.line,
 				"Code before .ORIG is not allowed.");
-		} else if (instruction.mem_addr > code.end_addr) {
+		} else if (instruction.mem_addr >= code.end_addr) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, "Code after .END directive.", instruction.line,
 				"Code after .END will be ignored.");
 		}
