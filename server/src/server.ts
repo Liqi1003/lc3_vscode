@@ -9,7 +9,11 @@ import {
   CompletionItemKind,
   TextDocumentPositionParams,
   TextDocumentSyncKind,
-  InitializeResult
+  InitializeResult,
+  CodeActionParams,
+  CodeAction,
+  CodeActionKind,
+  DiagnosticSeverity
 } from 'vscode-languageserver';
 
 import {
@@ -17,7 +21,8 @@ import {
 } from 'vscode-languageserver-textdocument';
 
 import {
-  generateDiagnostics
+  generateDiagnostics,
+  MESSAGE_POSSIBLE_SUBROUTINE
 } from './diagnostic';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -54,7 +59,8 @@ connection.onInitialize((params: InitializeParams) => {
       // Tell the client that this server supports code completion.
       completionProvider: {
         resolveProvider: true
-      }
+      },
+      codeActionProvider: true
     }
   };
   if (hasWorkspaceFolderCapability) {
@@ -80,13 +86,19 @@ connection.onInitialized(() => {
 });
 
 export interface ExtensionSettings {
+  showWarnings: boolean;
+  showErrors: boolean;
   enableMultipleLabels: boolean;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings: ExtensionSettings = { enableMultipleLabels: true };
+const defaultSettings: ExtensionSettings = {
+  showWarnings: true,
+  showErrors: true,
+  enableMultipleLabels: true
+};
 let globalSettings: ExtensionSettings = defaultSettings;
 
 // Cache the settings of all open documents
@@ -134,7 +146,7 @@ documents.onDidChangeContent(change => {
 
 export async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   // Get the settings of the document
-  let settings = await getDocumentSettings(textDocument.uri);
+  const settings = await getDocumentSettings(textDocument.uri);
 
   // Generate diagnostics
   let diagnostics: Diagnostic[];
@@ -142,6 +154,44 @@ export async function validateTextDocument(textDocument: TextDocument): Promise<
 
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+connection.onCodeAction(provideCodeActions);
+
+export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
+  // Check if document was correctly returned
+  const document = documents.get(parms.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  // Check if diagnostics is non-empty
+  const diagnostics = parms.context.diagnostics;
+  if (!(diagnostics) || diagnostics.length == 0) {
+    return [];
+  }
+
+  // Find the diagnostics with unused label
+  const codeActions: CodeAction[] = [];
+  diagnostics.forEach((diag) => {
+    if (diag.severity === DiagnosticSeverity.Warning && diag.message.includes(MESSAGE_POSSIBLE_SUBROUTINE)) {
+      codeActions.push({
+        title: "Insert a mark to indicate this is a subroutine",
+        kind: CodeActionKind.QuickFix,
+        diagnostics: [diag],
+        edit: {
+          changes: {
+            [parms.textDocument.uri]: [{
+              range: { start: diag.range.start, end: diag.range.start },
+              newText: "; @SUBROUTINE\n"
+            }]
+          }
+        }
+      });
+      return;
+    }
+  });
+  return codeActions;
 }
 
 // This handler provides the initial list of the completion items.
