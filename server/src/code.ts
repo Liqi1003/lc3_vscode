@@ -62,7 +62,7 @@ export class Code {
       }
       this.line_num++;
     }
-    console.log(this);
+    // console.log(this);
   }
 
   // Push an instruction according to its type (push/not push/push to label)

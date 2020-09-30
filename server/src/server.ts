@@ -6,7 +6,6 @@ import {
   InitializeParams,
   DidChangeConfigurationNotification,
   CompletionItem,
-  CompletionItemKind,
   TextDocumentPositionParams,
   TextDocumentSyncKind,
   InitializeResult,
@@ -24,6 +23,12 @@ import {
   generateDiagnostics,
   MESSAGE_POSSIBLE_SUBROUTINE
 } from './diagnostic';
+
+import {
+  OPNUM,
+  completionItems,
+  updateCompletionItems
+} from './completion'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -142,6 +147,7 @@ documents.onDidClose(e => {
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
   validateTextDocument(change.document);
+  updateCompletionItems(change.document);
 });
 
 export async function validateTextDocument(textDocument: TextDocument): Promise<void> {
@@ -151,7 +157,6 @@ export async function validateTextDocument(textDocument: TextDocument): Promise<
   // Generate diagnostics
   let diagnostics: Diagnostic[];
   diagnostics = generateDiagnostics(textDocument, settings);
-
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
@@ -194,109 +199,16 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
   return codeActions;
 }
 
-// This handler provides the initial list of the completion items.
+// Returns the completion list for the request
 connection.onCompletion(
   (_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
-    // The pass parameter contains the position of the text document in
-    // which code complete got requested. For the example we ignore this
-    // info and always provide the same completion items.
-    return [
-      {
-        label: 'ADD',
-        kind: CompletionItemKind.Text,
-        data: 1
-      },
-      {
-        label: 'AND',
-        kind: CompletionItemKind.Text,
-        data: 2
-      },
-      {
-        label: 'BR',
-        kind: CompletionItemKind.Text,
-        data: 3
-      },
-      {
-        label: 'JMP',
-        kind: CompletionItemKind.Text,
-        data: 4
-      },
-      {
-        label: 'JSR',
-        kind: CompletionItemKind.Text,
-        data: 5
-      },
-      {
-        label: 'LD',
-        kind: CompletionItemKind.Text,
-        data: 6
-      },
-      {
-        label: 'LDI',
-        kind: CompletionItemKind.Text,
-        data: 7
-      },
-      {
-        label: 'LDR',
-        kind: CompletionItemKind.Text,
-        data: 8
-      },
-      {
-        label: 'LEA',
-        kind: CompletionItemKind.Text,
-        data: 9
-      },
-      {
-        label: 'NOT',
-        kind: CompletionItemKind.Text,
-        data: 10
-      },
-      {
-        label: 'RET',
-        kind: CompletionItemKind.Text,
-        data: 11
-      },
-      {
-        label: 'ST',
-        kind: CompletionItemKind.Text,
-        data: 12
-      },
-      {
-        label: 'STI',
-        kind: CompletionItemKind.Text,
-        data: 13
-      },
-      {
-        label: 'STR',
-        kind: CompletionItemKind.Text,
-        data: 14
-      },
-      {
-        label: 'TRAP',
-        kind: CompletionItemKind.Text,
-        data: 15
-      },
-      {
-        label: 'ORIG',
-        kind: CompletionItemKind.Text,
-        data: 16
-      },
-      {
-        label: 'FILL',
-        kind: CompletionItemKind.Text,
-        data: 17
-      },
-      {
-        label: 'BLKW',
-        kind: CompletionItemKind.Text,
-        data: 18
-      },
-      {
-        label: 'STRINGZ',
-        kind: CompletionItemKind.Text,
-        data: 19
+    completionItems.forEach(item => {
+      // Remove item on the current line
+      if(item.data === _textDocumentPosition.position.line){
+        completionItems.splice(completionItems.indexOf(item), 1);
       }
-    ];
+    });
+    return completionItems;
   }
 );
 
@@ -304,61 +216,61 @@ connection.onCompletion(
 // the completion list.
 connection.onCompletionResolve(
   (item: CompletionItem): CompletionItem => {
-    if (item.data === 1) {
+    if (item.data === OPNUM.ADD) {
       item.detail = 'Addition';
       item.documentation = 'Usage:\nADD DR, SR1, SR2\nADD DR, SR1, imm5';
-    } else if (item.data === 2) {
+    } else if (item.data === OPNUM.AND) {
       item.detail = 'Bit-wise logical AND';
       item.documentation = 'Usage:\nAND DR, SR1, SR2\nAND DR, SR1, imm5';
-    } else if (item.data === 3) {
+    } else if (item.data === OPNUM.BR) {
       item.detail = 'Conditional branch';
       item.documentation = 'Usage:\nBR(nzp) LABEL';
-    } else if (item.data === 4) {
+    } else if (item.data === OPNUM.JMP) {
       item.detail = 'Jump';
       item.documentation = 'Usage:\nJMP BaseR';
-    } else if (item.data === 5) {
+    } else if (item.data === OPNUM.JSR) {
       item.detail = 'Jump to Subroutine';
       item.documentation = 'Usage:\nJSR LABEL';
-    } else if (item.data === 6) {
+    } else if (item.data === OPNUM.LD) {
       item.detail = 'Load';
       item.documentation = 'Usage:\nLD DR, LABEL';
-    } else if (item.data === 7) {
+    } else if (item.data === OPNUM.LDI) {
       item.detail = 'Load indirect';
       item.documentation = 'Usage:\nLDI DR, LABEL';
-    } else if (item.data === 8) {
+    } else if (item.data === OPNUM.LDR) {
       item.detail = 'Load base+offset';
       item.documentation = 'Usage:\nLDR DR, BaseR, offset6';
-    } else if (item.data === 9) {
+    } else if (item.data === OPNUM.LEA) {
       item.detail = 'Load effective address';
       item.documentation = 'Usage:\nLEA LABEL';
-    } else if (item.data === 10) {
+    } else if (item.data === OPNUM.NOT) {
       item.detail = 'Bit-wise complement';
       item.documentation = 'Usage:\nNOT DR, SR';
-    } else if (item.data === 11) {
+    } else if (item.data === OPNUM.RET) {
       item.detail = 'Return from subroutine';
       item.documentation = 'Usage:\nRET';
-    } else if (item.data === 12) {
+    } else if (item.data === OPNUM.ST) {
       item.detail = 'Store';
       item.documentation = 'Usage:\nST SR, LABEL';
-    } else if (item.data === 13) {
+    } else if (item.data === OPNUM.STI) {
       item.detail = 'Store indirect';
       item.documentation = 'Usage:\nSTI SR, LABEL';
-    } else if (item.data === 14) {
+    } else if (item.data === OPNUM.STR) {
       item.detail = 'Store base+offset';
       item.documentation = 'Usage:\nSTR BaseR offset6';
-    } else if (item.data === 15) {
+    } else if (item.data === OPNUM.TRAP) {
       item.detail = 'System call';
       item.documentation = 'Usage:\nTRAP trapvector8';
-    } else if (item.data === 16) {
+    } else if (item.data === OPNUM.ORIG) {
       item.detail = 'Starting point of program';
       item.documentation = 'Example:\n.ORIG 0x3000';
-    } else if (item.data === 17) {
+    } else if (item.data === OPNUM.FILL) {
       item.detail = 'Fill with data';
       item.documentation = 'Example:\n.FILL 0x0';
-    } else if (item.data === 18) {
+    } else if (item.data === OPNUM.BLKW) {
       item.detail = 'Block of word';
       item.documentation = 'Example:\n.BLKW 10';
-    } else if (item.data === 19) {
+    } else if (item.data === OPNUM.STRINGZ) {
       item.detail = 'String';
       item.documentation = 'Example:\n.STRINGZ \'string example\'';
     }
