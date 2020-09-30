@@ -141,13 +141,18 @@ export let completionItems: CompletionItem[];
 export function updateCompletionItems(textDocument: TextDocument) {
 	completionItems = [...defaultCompletionItems];
 	const code = new Code(textDocument.getText());
-	let idx: number;
+	let idx: number, i: number;
 	let label: Label;
 	let item: CompletionItem;
 	for (idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		item = { label: label.name, kind: CompletionItemKind.Text, data: label.line };
-		if (!completionItems.includes(item)) {
+		for (i = 0; i < completionItems.length; i++) {
+			if (completionItems[i].label == label.name) {
+				break;
+			}
+		}
+		if (i == completionItems.length) {
 			completionItems.push(item);
 		}
 	}
