@@ -41,97 +41,97 @@ const defaultCompletionItems: CompletionItem[] = [
 	{
 		label: 'ADD',
 		kind: CompletionItemKind.Operator,
-		data: 1
+		data: OPNUM.ADD
 	},
 	{
 		label: 'AND',
 		kind: CompletionItemKind.Operator,
-		data: 2
+		data: OPNUM.AND
 	},
 	{
 		label: 'BR',
 		kind: CompletionItemKind.Operator,
-		data: 3
+		data: OPNUM.BR
 	},
 	{
 		label: 'JMP',
 		kind: CompletionItemKind.Operator,
-		data: 4
+		data: OPNUM.JMP
 	},
 	{
 		label: 'JSR',
 		kind: CompletionItemKind.Operator,
-		data: 5
+		data: OPNUM.JSR
 	},
 	{
 		label: 'LD',
 		kind: CompletionItemKind.Operator,
-		data: 6
+		data: OPNUM.LD
 	},
 	{
 		label: 'LDI',
 		kind: CompletionItemKind.Operator,
-		data: 7
+		data: OPNUM.LDI
 	},
 	{
 		label: 'LDR',
 		kind: CompletionItemKind.Operator,
-		data: 8
+		data: OPNUM.LDR
 	},
 	{
 		label: 'LEA',
 		kind: CompletionItemKind.Operator,
-		data: 9
+		data: OPNUM.LEA
 	},
 	{
 		label: 'NOT',
 		kind: CompletionItemKind.Operator,
-		data: 10
+		data: OPNUM.NOT
 	},
 	{
 		label: 'RET',
 		kind: CompletionItemKind.Operator,
-		data: 11
+		data: OPNUM.RET
 	},
 	{
 		label: 'ST',
 		kind: CompletionItemKind.Operator,
-		data: 12
+		data: OPNUM.ST
 	},
 	{
 		label: 'STI',
 		kind: CompletionItemKind.Operator,
-		data: 13
+		data: OPNUM.STI
 	},
 	{
 		label: 'STR',
 		kind: CompletionItemKind.Operator,
-		data: 14
+		data: OPNUM.STR
 	},
 	{
 		label: 'TRAP',
 		kind: CompletionItemKind.Operator,
-		data: 15
+		data: OPNUM.TRAP
 	},
 	{
 		label: 'ORIG',
 		kind: CompletionItemKind.Operator,
-		data: 16
+		data: OPNUM.ORIG
 	},
 	{
 		label: 'FILL',
 		kind: CompletionItemKind.Operator,
-		data: 17
+		data: OPNUM.FILL
 	},
 	{
 		label: 'BLKW',
 		kind: CompletionItemKind.Operator,
-		data: 18
+		data: OPNUM.BLKW
 	},
 	{
 		label: 'STRINGZ',
 		kind: CompletionItemKind.Operator,
-		data: 19
+		data: OPNUM.STRINGZ
 	}
 ];
 
