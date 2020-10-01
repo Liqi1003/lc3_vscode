@@ -72,6 +72,7 @@ AND R0, R0, xFFFF
 
 ; BR #5
 ; JSR x10
+; LEA R0, xFFFE
 ; ****************************************
 
 ; ****************************************
@@ -81,13 +82,17 @@ AND R0, R0, xFFFF
 ; LABEL_FAR_ABOVE
 ; ADD R0, R0, #0
 ; RET
+
 ; BR LABEL_FAR_BELOW
-; LEA R0, LABEL_FAR_BELOW
 ; JSR LABEL_FAR_BELOW
+; LEA R0, LABEL_FAR_BELOW
+
 ; .BLKW #2048
+
 ; LABEL_FAR_BELOW
 ; ADD R0, R0, #0
 ; RET
+
 ; BR LABEL_FAR_ABOVE
 ; JSR LABEL_FAR_ABOVE
 ; LEA R0, LABEL_FAR_ABOVE
