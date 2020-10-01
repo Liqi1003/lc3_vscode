@@ -301,10 +301,11 @@ function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnosti
 		idx--;
 	} while (code.instructions[idx].optype == "LABEL" || code.instructions[idx].optype == ".FILL" ||
 	code.instructions[idx].optype == ".BLKW" || code.instructions[idx].optype == ".STRINGZ");
+
 	if ((code.instructions[idx].optype != "BR" || (code.instructions[idx].optype == "BR" &&
-		(!code.instructions[idx].n || !code.instructions[idx].z || !code.instructions[idx].p))
+		(!code.instructions[idx].n || !code.instructions[idx].z || !code.instructions[idx].p)))
 		&& code.instructions[idx].optype != "JMP" && code.instructions[idx].optype != "RET"
-		&& code.instructions[idx].optype != "HALT" && get_trap_function(code.instructions[idx]) != TRAPVEC.HALT)) {
+		&& code.instructions[idx].optype != "HALT" && get_trap_function(code.instructions[idx]) != TRAPVEC.HALT) {
 		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, "Running into data.", instruction.line,
 			"The program runs into data without necessary Branching/Jumping instructions.");
 	}
