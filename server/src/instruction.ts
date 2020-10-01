@@ -10,30 +10,31 @@ export enum TRAPVEC {
 
 export class Instruction {
   // Internal variables
-  public optype: string;
-  public mem_addr: number;
-  public mem: string;
-  public line: number;
-  public src: number;
-  public src2: number;
-  public dest: number;
-  public imm_val: number;
-  public imm_val_type: string;
-  public n: boolean;
-  public z: boolean;
-  public p: boolean;
-  public illegal_cc: boolean;
-  public is_data: boolean;
-  public incomplete: boolean;
+  public optype: string;              // Operation type
+  public mem_addr: number;            // Memory address
+  public mem: string;                 // Targeting memory (label name)
+  public line: number;                // Line number
+  public src: number;                 // Source reg1
+  public src2: number;                // Source reg2
+  public dest: number;                // Destination reg
+  public imm_val: number;             // Immediate value/ PC offset
+  public imm_val_type: string;        // Immediate value type: R, X, #, 0/1
+  public n: boolean;                  // cc:n
+  public z: boolean;                  // cc:z
+  public p: boolean;                  // cc:p
+  public illegal_cc: boolean;         // Flag for illegal CC (like npz)
+  public is_data: boolean;            // Flag for data
+  public incomplete: boolean;         // Flag for incomplete instruction
+  public containsSemicolon: boolean;  // Flag for label contains semicolon
   // Subroutine
-  public subroutine_num: number;
-  public is_subroutine_start: boolean;
-  public code_overlap: number;
+  public subroutine_num: number;        // Subroutine ID
+  public is_subroutine_start: boolean;  // Flag for subroutine entry
+  public code_overlap: number;          // Subroutine ID of the other code that overlaps
   // Added for CFG
-  public next_instruction: Instruction | null;
-  public br_target: Instruction | null;
-  public jsr_target: Instruction | null;
-  public is_found: boolean;
+  public next_instruction: Instruction | null;  // Pointer to next instruction
+  public br_target: Instruction | null;         // Pointer to BR target
+  public jsr_target: Instruction | null;        // Pointer to JSR target
+  public is_found: boolean;                     // Flag for found
 
   constructor(inst: string) {
     // Default values
@@ -51,6 +52,7 @@ export class Instruction {
     this.p = false;
     this.illegal_cc = false;
     this.incomplete = false;
+    this.containsSemicolon = false;
     this.is_data = false;
     this.subroutine_num = NaN;
     this.is_subroutine_start = false;
@@ -97,6 +99,9 @@ export class Instruction {
         if (instlst.length >= 2) {
           this.dest = this.parseValue(instlst[1]);
         } else {
+          this.incomplete = true;
+        }
+        if (isNaN(this.dest)) {
           this.incomplete = true;
         }
         break;
@@ -200,6 +205,9 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
+        if (this.imm_val < 0x20 || this.imm_val > 0x25) {
+          this.imm_val = 0;
+        }
         break;
       // Frequently used TRAP vectors
       case "GETC":
@@ -255,14 +263,22 @@ export class Instruction {
         this.is_data = true;
         break;
       case ".BLKW":
-        this.imm_val = this.parseValue(instlst[1]);
-        this.imm_val_type = instlst[1][0];
+        if (instlst.length >= 2) {
+          this.imm_val = this.parseValue(instlst[1]);
+          this.imm_val_type = instlst[1][0];
+        } else {
+          this.incomplete = true;
+        }
         this.is_data = true;
         break;
       case ".STRINGZ":
-        let str = inst.slice(inst.split(' ')[0].length).trim();
-        str = str.slice(1, str.length - 1);
-        this.mem = String(str);
+        if (instlst.length >= 2) {
+          let str = inst.slice(inst.split(' ')[0].length).trim();
+          str = str.slice(1, str.length - 1);
+          this.mem = String(str);
+        } else {
+          this.incomplete = true;
+        }
         this.is_data = true;
         break;
 
@@ -285,6 +301,17 @@ export class Instruction {
           this.mem = instlst[0];
         }
         break;
+    }
+
+    // For instructions, keep ';', for labels, remove ';'
+    // This is to accomodate for the lc3as behavior, may not compatiable with v3
+    if (this.mem && this.optype == "LABEL") {
+      for (i = 0; i < this.mem.length; i++) {
+        if (this.mem[i] == ';') {
+          this.mem = this.mem.slice(0, i);
+          this.containsSemicolon = true;
+        }
+      }
     }
   }
 
@@ -312,7 +339,7 @@ export class Instruction {
       default:
         // Binary
         if (is_lc3_number(val)) {
-          ret = ~~parseInt(val, 2);
+          ret = parseInt(val, 2);
         } else {
           ret = NaN;
         }
@@ -323,6 +350,7 @@ export class Instruction {
     return ret;
   }
 
+  // Assign CC according to the string input
   parseCC(cc: string) {
     switch (cc) {
       case "":
@@ -373,11 +401,12 @@ export class Instruction {
 }
 
 export class Label {
-  public mem_addr: number;
-  public name: string;
-  public line: number;
-  public instruction: Instruction | null;
-  public isBR: boolean;
+  public mem_addr: number;                // Memory address
+  public name: string;                    // Name of label
+  public line: number;                    // Line number
+  public instruction: Instruction | null; // Instruction at the same memory address
+  public isBR: boolean;                   // Is meant to be a BR instruction with illegal CC
+  public containsSemicolon: boolean;      // Contains a semicolon
 
   constructor(instruction: Instruction) {
     this.mem_addr = instruction.mem_addr;
@@ -385,6 +414,7 @@ export class Label {
     this.line = instruction.line;
     this.instruction = null;
     this.isBR = false;
+    this.containsSemicolon = instruction.containsSemicolon;
   }
 }
 

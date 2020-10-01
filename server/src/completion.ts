@@ -135,6 +135,7 @@ const defaultCompletionItems: CompletionItem[] = [
 	}
 ];
 
+// To be sent to the server
 export let completionItems: CompletionItem[];
 
 // Update completion item list according to the label names
@@ -156,5 +157,5 @@ export function updateCompletionItems(textDocument: TextDocument) {
 			completionItems.push(item);
 		}
 	}
-	console.log(completionItems);
+	// console.log(completionItems);
 }

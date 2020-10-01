@@ -7,13 +7,13 @@ import {
 } from './instruction'
 
 export class Code {
-  public start_addr: number;
-  public end_addr: number;
-  public instructions: Instruction[];
-  public labels: Label[];
-  private line_num: number;
-  private mem_addr: number;
-  private stack: Stack<Instruction>;
+  public start_addr: number;          // Start address marked by .ORIG
+  public end_addr: number;            // End address marked by .END
+  public instructions: Instruction[]; // Instructions array
+  public labels: Label[];             // Labels array
+  private line_num: number;           // Keeps track of current line number
+  private mem_addr: number;           // Keep track of current memory address
+  private stack: Stack<Instruction>;  // Stack used for building CFG
 
   constructor(text: string) {
     this.start_addr = NaN;
@@ -82,6 +82,7 @@ export class Code {
       instruction.mem_addr = this.mem_addr++;
     }
 
+    // Decide what to do according to optype
     switch (instruction.optype) {
       case ".ORIG":
       case ".END":
@@ -90,11 +91,15 @@ export class Code {
         this.instructions.push(instruction);
         break;
       case ".BLKW":
-        this.mem_addr += instruction.imm_val - 1;
+        if (!isNaN(instruction.imm_val)){
+          this.mem_addr += instruction.imm_val - 1;
+        }
         this.instructions.push(instruction);
         break;
       case ".STRINGZ":
-        this.mem_addr += instruction.mem.length;
+        if (!isNaN(instruction.mem.length)){
+          this.mem_addr += instruction.mem.length;
+        }
         for (i = 0; i < instruction.mem.length; i++) {
           // Take out the '\' characters
           if (instruction.mem[i] == '\\') {
@@ -204,6 +209,7 @@ export class Code {
     }
   }
 
+  // Returns the label at the specified line number (assuming line number is always legal)
   private findLabelByLine(line: number): Label {
     let idx: number;
     let label: Label;
