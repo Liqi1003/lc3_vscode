@@ -167,7 +167,7 @@ export class Code {
       } else if (instruction.optype == "BR") {
         // BR
         instruction.br_target = this.get_target(idx);
-        if (instruction.n && instruction.z && instruction.p) {
+        if (instruction.br_target && instruction.n && instruction.z && instruction.p) {
           instruction.next_instruction = null;
         }
       } else if (instruction.optype == "RET" ||

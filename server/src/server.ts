@@ -179,7 +179,7 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
   // Find the diagnostics with unused label
   const codeActions: CodeAction[] = [];
   diagnostics.forEach((diag) => {
-    if (diag.severity === DiagnosticSeverity.Warning && diag.message.includes(MESSAGE_POSSIBLE_SUBROUTINE)) {
+    if (diag.severity === DiagnosticSeverity.Hint && diag.message.includes(MESSAGE_POSSIBLE_SUBROUTINE)) {
       codeActions.push({
         title: "Insert a mark to indicate this is a subroutine",
         kind: CodeActionKind.QuickFix,

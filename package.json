@@ -2,7 +2,7 @@
 	"name": "lc3support",
 	"description": "LC3 support, including code highlight, autocompletion and static checking",
 	"license": "MIT",
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",
