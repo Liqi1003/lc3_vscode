@@ -1,4 +1,6 @@
-import { ThemeIcon } from "vscode";
+import { 
+  BasicBlock 
+} from "./basicBlock";
 
 export enum TRAPVEC {
   INVALID = 0x0,
@@ -37,6 +39,8 @@ export class Instruction {
   public br_target: Instruction | null;         // Pointer to BR target
   public jsr_target: Instruction | null;        // Pointer to JSR target
   public is_found: boolean;                     // Flag for found
+  public incoming_arcs: number;                 // Number of incoming arcs
+  public in_block: BasicBlock | null;           // Basic block containing the instruction
 
   constructor(inst: string) {
     // Default values
@@ -63,6 +67,8 @@ export class Instruction {
     this.br_target = null;
     this.jsr_target = null;
     this.is_found = false;
+    this.incoming_arcs = 0;
+    this.in_block = null;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -132,7 +138,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || !isNaN(this.parseValue(this.mem))) {
+        if (this.dest == NaN || this.isReg(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -156,7 +162,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || !isNaN(this.parseValue(this.mem))) {
+        if (this.dest == NaN || this.isReg(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -183,7 +189,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.src) || !isNaN(this.parseValue(this.mem))) {
+        if (isNaN(this.src) || this.isReg(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -342,9 +348,34 @@ export class Instruction {
     }
   }
 
+  // Returns whether current instruction ends a basic block
+  public endBasicBlock(): boolean {
+    switch (this.optype) {
+      case "RET":
+      case "TRAP":
+      case "BR":
+      case "JSR":
+        return true;
+      default:
+        if (this.next_instruction && this.next_instruction.isData()) {
+          return true;
+        } else {
+          return false;
+        }
+    }
+  }
+  
+  // Helper function to decide whether the parameter is a register name
+  private isReg(val: string): boolean {
+    if(val[0] == 'R' && !isNaN(this.parseValue(val))){
+      return true;
+    }
+    return false;
+  }
+
   // Helper function to parse values from a string
   // Possible value type: Register, decimal, hexadecimal, binary
-  parseValue(val: string): number {
+  private parseValue(val: string): number {
     let ret;
     val = val.trim();
     switch (val[0]) {
@@ -378,7 +409,7 @@ export class Instruction {
   }
 
   // Assign CC according to the string input
-  parseCC(cc: string) {
+  private parseCC(cc: string) {
     switch (cc) {
       case "":
         this.n = true;

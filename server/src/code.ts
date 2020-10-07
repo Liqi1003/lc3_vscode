@@ -1,6 +1,10 @@
 import Stack from 'ts-data.stack/stack';
 
 import {
+  BasicBlock
+} from "./basicBlock";
+
+import {
   TRAPVEC,
   Instruction,
   Label
@@ -11,6 +15,7 @@ export class Code {
   public end_addr: number;            // End address marked by .END
   public instructions: Instruction[]; // Instructions array
   public labels: Label[];             // Labels array
+  public basicBlocks: BasicBlock[];   // Basic Blocks
   private line_num: number;           // Keeps track of current line number
   private mem_addr: number;           // Keep track of current memory address
   private stack: Stack<Instruction>;  // Stack used for building CFG
@@ -20,6 +25,7 @@ export class Code {
     this.end_addr = NaN;
     this.instructions = [];
     this.labels = [];
+    this.basicBlocks = [];
     this.line_num = 0;
     this.mem_addr = NaN;
     this.stack = new Stack<Instruction>();
@@ -29,6 +35,7 @@ export class Code {
     this.analyzeCFG();
     this.markSubroutines(text);
     this.analyzeCode();
+    this.buildBlocks();
   }
 
   private buildInstructions(text: string) {
@@ -91,13 +98,13 @@ export class Code {
         this.instructions.push(instruction);
         break;
       case ".BLKW":
-        if (!isNaN(instruction.imm_val)){
+        if (!isNaN(instruction.imm_val)) {
           this.mem_addr += instruction.imm_val - 1;
         }
         this.instructions.push(instruction);
         break;
       case ".STRINGZ":
-        if (!isNaN(instruction.mem.length)){
+        if (!isNaN(instruction.mem.length)) {
           this.mem_addr += instruction.mem.length;
         }
         for (i = 0; i < instruction.mem.length; i++) {
@@ -150,12 +157,17 @@ export class Code {
   private analyzeCFG() {
     let idx: number, i: number;
     let instruction: Instruction;
+    let next: Instruction | null;
 
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
       // Skip data
       if (instruction.mem_addr == 0 || instruction.isData()) {
         continue;
+      }
+      // Mark the first instruction to be accessiable from start
+      if (instruction.mem_addr == this.start_addr) {
+        instruction.incoming_arcs = 1;
       }
       // Link instructions
       if (idx + 1 < this.instructions.length) {
@@ -174,6 +186,18 @@ export class Code {
         (instruction.optype == "TRAP" && instruction.imm_val == TRAPVEC.HALT)) {
         // RET and HALT do not have next_instruction
         instruction.next_instruction = null;
+      }
+    }
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      // Next instruction
+      next = this.instructions[idx].next_instruction;
+      if (next) {
+        next.incoming_arcs++;
+      }
+      // Branch target
+      next = this.instructions[idx].br_target;
+      if (next) {
+        next.incoming_arcs++;
       }
     }
   }
@@ -246,7 +270,7 @@ export class Code {
     let cur_instruction: Instruction;
     let next_instrcution: Instruction | null;
 
-    if (initial_instruction.is_subroutine_start && 
+    if (initial_instruction.is_subroutine_start &&
       initial_instruction.subroutine_num != subroutine_num) {
       initial_instruction.code_overlap = subroutine_num;
     } else {
@@ -294,5 +318,73 @@ export class Code {
       }
     }
     return null;
+  }
+
+  private buildBlocks() {
+    let bb: BasicBlock;
+    let instruction: Instruction;
+    let idx: number;
+
+    // Explore the main routine
+    bb = this.buildOneBlock(this.instructions[0], this.start_addr);
+    this.basicBlocks.push(bb);
+
+    // Explore subroutines
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if (instruction.is_subroutine_start) {
+        bb = this.buildOneBlock(instruction, instruction.subroutine_num);
+        this.basicBlocks.push(bb);
+      }
+    }
+  }
+
+  // Helper function to build one basic block
+  private buildOneBlock(instruction: Instruction, subroutine_num: number): BasicBlock {
+    let bb: BasicBlock | null;
+    let cur: Instruction | null, next: Instruction | null;
+
+    cur = instruction;
+    bb = cur.in_block;
+    // Instruction already in a basic block
+    if (bb != null) {
+      // Accessd from another routine
+      if (bb.subroutine_num != subroutine_num) {
+        bb.inMultipleRoutine = true;
+      }
+
+      return bb;
+    }
+
+    // Create a new basic block
+    bb = new BasicBlock();
+    cur.in_block = bb;
+    bb.pushInstruction(cur);
+
+    // Get next instruction
+    next = cur.next_instruction;
+    while (!cur.endBasicBlock() && cur.br_target == null && cur.jsr_target == null &&
+      next && next.incoming_arcs == 1) {
+      // Push next instruction into this basic block
+      bb.pushInstruction(next);
+      next.in_block = bb;
+
+      // Go to the next instruction
+      cur = next;
+      next = cur.next_instruction;
+    }
+
+    // One instruction ends the current basic block
+    // If it has a next instruction
+    if (cur.next_instruction) {
+      bb.next_block.push(this.buildOneBlock(cur.next_instruction, cur.next_instruction.subroutine_num))
+    }
+    // If it has a branch target
+    if (cur.br_target) {
+      bb.next_block.push(this.buildOneBlock(cur.br_target, cur.br_target.subroutine_num))
+    }
+
+    // Return the built basic block
+    return bb;
   }
 }

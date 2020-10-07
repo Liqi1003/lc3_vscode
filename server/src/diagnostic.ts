@@ -21,8 +21,7 @@ import {
 	TRAPVEC,
 	Instruction,
 	Label,
-	is_lc3_number,
-	get_trap_function
+	is_lc3_number
 } from './instruction'
 
 
