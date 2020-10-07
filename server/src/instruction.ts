@@ -26,7 +26,6 @@ export class Instruction {
   public z: boolean;                  // cc:z
   public p: boolean;                  // cc:p
   public illegal_cc: boolean;         // Flag for illegal CC (like npz)
-  public is_data: boolean;            // Flag for data
   public incomplete: boolean;         // Flag for incomplete instruction
   public containsSemicolon: boolean;  // Flag for label contains semicolon
   // Subroutine
@@ -57,7 +56,6 @@ export class Instruction {
     this.illegal_cc = false;
     this.incomplete = false;
     this.containsSemicolon = false;
-    this.is_data = false;
     this.subroutine_num = NaN;
     this.is_subroutine_start = false;
     this.code_overlap = NaN;
@@ -134,7 +132,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN) {
+        if (this.dest == NaN || !isNaN(this.parseValue(this.mem))) {
           this.incomplete = true;
         }
         break;
@@ -158,7 +156,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN) {
+        if (this.dest == NaN || !isNaN(this.parseValue(this.mem))) {
           this.incomplete = true;
         }
         break;
@@ -185,7 +183,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.src)) {
+        if (isNaN(this.src) || !isNaN(this.parseValue(this.mem))) {
           this.incomplete = true;
         }
         break;
@@ -264,7 +262,6 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_data = true;
         break;
       case ".BLKW":
         if (instlst.length >= 2) {
@@ -273,7 +270,6 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_data = true;
         break;
       case ".STRINGZ":
         if (instlst.length >= 2) {
@@ -283,7 +279,6 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        this.is_data = true;
         break;
 
       default:
@@ -316,6 +311,34 @@ export class Instruction {
           this.containsSemicolon = true;
         }
       }
+    }
+  }
+
+  // Returns whether current instruction operates on memory
+  public isMemType(): boolean {
+    switch(this.optype) {
+      case "LD":
+      case "LDI":
+      case "ST":
+      case "STI":
+      case "LEA":
+      case "JSR":
+      case "BR":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Returns whether current instruction is data
+  public isData(): boolean {
+    switch(this.optype) {
+      case ".FILL":
+      case ".STRINGZ":
+      case ".BLKW":
+        return true;
+      default:
+        return false;
     }
   }
 

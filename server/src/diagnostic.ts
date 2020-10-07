@@ -235,7 +235,7 @@ function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: D
 	let instruction: Instruction;
 	for (i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
-		if (!instruction.is_data && !instruction.is_found) {
+		if (!instruction.isData() && !instruction.is_found) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}
@@ -247,7 +247,7 @@ function checkUncalledSubroutines(textDocument: TextDocument, diagnostics: Diagn
 	let label: Label;
 	for (i = 0; i < code.labels.length; i++) {
 		label = code.labels[i];
-		if (label.instruction && !label.instruction.is_data && !label.instruction.is_found) {
+		if (label.instruction && !label.instruction.isData() && !label.instruction.is_found) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], MESSAGE_POSSIBLE_SUBROUTINE, label.line,
 				"The code after this label is unreachable. Is this label a subroutine?");
 		}
@@ -290,7 +290,7 @@ function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], 
 	let target: Instruction | null;
 	if (idx < code.labels.length) {
 		target = code.labels[idx].instruction;
-		if (target && target.is_data) {
+		if (target && target.isData()) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Jumping/Branching to data.", instruction.line,
 				"The destination of this instruction is line " + (target.line + 1) + ", which is data.");
 		}
@@ -306,9 +306,9 @@ function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnosti
 	let next_instruction: Instruction | null;
 	for (i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
-		if (!instruction.is_data) {
+		if (!instruction.isData()) {
 			next_instruction = instruction.next_instruction;
-			if (next_instruction && next_instruction.is_data) {
+			if (next_instruction && next_instruction.isData()) {
 				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Running into data.", next_instruction.line,
 					"The program may run into data after executing the instruction \"" + instruction.raw_string + "\" at line " + (instruction.line + 1) + ".");
 			}

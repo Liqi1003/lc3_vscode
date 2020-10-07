@@ -15,9 +15,16 @@ export enum OPNUM {
 	STR,
 	TRAP,
 	ORIG,
+	END,
 	FILL,
 	BLKW,
-	STRINGZ
+	STRINGZ,
+	GETC,
+	IN,
+	OUT,
+	PUTS,
+	PUTSP,
+	HALT
 }
 
 import {
@@ -34,6 +41,7 @@ import {
 } from './code';
 
 import {
+	Instruction,
 	Label
 } from './instruction'
 
@@ -132,6 +140,36 @@ const defaultCompletionItems: CompletionItem[] = [
 		label: 'STRINGZ',
 		kind: CompletionItemKind.Operator,
 		data: OPNUM.STRINGZ
+	},
+	{
+		label: 'GETC',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.GETC
+	},
+	{
+		label: 'IN',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.IN
+	},
+	{
+		label: 'OUT',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.OUT
+	},
+	{
+		label: 'PUTS',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.PUTS
+	},
+	{
+		label: 'PUTSP',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.PUTSP
+	},
+	{
+		label: 'HALT',
+		kind: CompletionItemKind.Operator,
+		data: OPNUM.HALT
 	}
 ];
 
@@ -144,7 +182,9 @@ export function updateCompletionItems(textDocument: TextDocument) {
 	const code = new Code(textDocument.getText());
 	let idx: number, i: number;
 	let label: Label;
+	let instruction: Instruction;
 	let item: CompletionItem;
+	// Push labels
 	for (idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		item = { label: label.name, kind: CompletionItemKind.Text, data: label.line };
@@ -155,6 +195,21 @@ export function updateCompletionItems(textDocument: TextDocument) {
 		}
 		if (i == completionItems.length) {
 			completionItems.push(item);
+		}
+	}
+	// Push labels in instructions
+	for (idx = 0; idx < code.instructions.length; idx++) {
+		instruction = code.instructions[idx];
+		if(!instruction.incomplete && instruction.isMemType()) {
+			item = { label: instruction.mem, kind: CompletionItemKind.Text, data: instruction.line };
+			for (i = 0; i < completionItems.length; i++) {
+				if (completionItems[i].label == instruction.mem) {
+					break;
+				}
+			}
+			if (i == completionItems.length) {
+				completionItems.push(item);
+			}
 		}
 	}
 	// console.log(completionItems);

@@ -154,7 +154,7 @@ export class Code {
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
       // Skip data
-      if (instruction.mem_addr == 0 || instruction.is_data) {
+      if (instruction.mem_addr == 0 || instruction.isData()) {
         continue;
       }
       // Link instructions
