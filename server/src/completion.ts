@@ -1,5 +1,5 @@
 export enum OPNUM {
-  ADD = 10000,
+	ADD = 10000,
 	AND,
 	BR,
 	JMP,

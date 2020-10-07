@@ -204,7 +204,7 @@ connection.onCompletion(
   (_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
     completionItems.forEach(item => {
       // Remove item on the current line
-      if(item.data === _textDocumentPosition.position.line){
+      if (item.data === _textDocumentPosition.position.line) {
         completionItems.splice(completionItems.indexOf(item), 1);
       }
     });

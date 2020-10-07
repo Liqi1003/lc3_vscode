@@ -50,6 +50,9 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	// Check for code before/after .ORIG/.END
 	checkORIGandEND(textDocument, diagnostics, settings, code);
 
+	// Check for running into data
+	checkRunningIntoData(textDocument, diagnostics, settings, code);
+
 	// Single line of code checkings (not block of codes)
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
@@ -102,6 +105,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				switch (instruction.imm_val) {
 					case TRAPVEC.INVALID:
 						generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Unknown TRAP vector.", instruction.line, "");
+						break;
 					case TRAPVEC.HALT:
 						if (instruction.subroutine_num != code.start_addr) {
 							generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "HALT inside subroutine.", instruction.line,
@@ -118,7 +122,6 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				break;
 			case ".FILL":
 			case ".STRINGZ":
-				checkRunningIntoData(textDocument, diagnostics, settings, instruction, code, idx);
 				break;
 			case ".BLKW":
 				if (!instruction.incomplete && instruction.imm_val_type != '#' && instruction.imm_val_type != '0' && instruction.imm_val_type != 'X' && instruction.imm_val != 1) {
@@ -126,7 +129,6 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 						".BLKW directives view the number as decimal by default. If you meant to write a binary number, add a leading 0; if you \
 						meant to write a decimal number, add a leading #.");
 				}
-				checkRunningIntoData(textDocument, diagnostics, settings, instruction, code, idx);
 				break;
 
 			default:
@@ -297,19 +299,20 @@ function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], 
 	}
 }
 
-// Check for running into data (Warning) (TODO: Rewrite this)
-function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, instruction: Instruction, code: Code, idx: number) {
-	do {
-		idx--;
-	} while (code.instructions[idx].optype == "LABEL" || code.instructions[idx].optype == ".FILL" ||
-	code.instructions[idx].optype == ".BLKW" || code.instructions[idx].optype == ".STRINGZ");
-
-	if ((code.instructions[idx].optype != "BR" || (code.instructions[idx].optype == "BR" &&
-		(!code.instructions[idx].n || !code.instructions[idx].z || !code.instructions[idx].p)))
-		&& code.instructions[idx].optype != "JMP" && code.instructions[idx].optype != "RET"
-		&& code.instructions[idx].optype != "HALT" && get_trap_function(code.instructions[idx]) != TRAPVEC.HALT) {
-		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Running into data.", instruction.line,
-			"The program runs into data without necessary Branching/Jumping instructions.");
+// Check for running into data (Warning)
+function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
+	let i: number;
+	let instruction: Instruction;
+	let next_instruction: Instruction | null;
+	for (i = 0; i < code.instructions.length; i++) {
+		instruction = code.instructions[i];
+		if (!instruction.is_data) {
+			next_instruction = instruction.next_instruction;
+			if (next_instruction && next_instruction.is_data) {
+				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Running into data.", next_instruction.line,
+					"The program may run into data after executing the instruction \"" + instruction.raw_string + "\" at line " + (instruction.line + 1) + ".");
+			}
+		}
 	}
 }
 

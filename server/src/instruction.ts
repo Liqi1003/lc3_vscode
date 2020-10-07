@@ -1,3 +1,5 @@
+import { ThemeIcon } from "vscode";
+
 export enum TRAPVEC {
   INVALID = 0x0,
   GETC = 0x20,
@@ -10,6 +12,7 @@ export enum TRAPVEC {
 
 export class Instruction {
   // Internal variables
+  public raw_string: string;          // The original line content
   public optype: string;              // Operation type
   public mem_addr: number;            // Memory address
   public mem: string;                 // Targeting memory (label name)
@@ -38,6 +41,7 @@ export class Instruction {
 
   constructor(inst: string) {
     // Default values
+    this.raw_string = inst;
     this.optype = "";
     this.mem_addr = NaN;
     this.mem = "";
