@@ -367,7 +367,7 @@ export class Instruction {
   
   // Helper function to decide whether the parameter is a register name
   private isReg(val: string): boolean {
-    if(val[0] == 'R' && !isNaN(this.parseValue(val))){
+    if (val.length == 2 && val[0] == 'R' && !isNaN(this.parseValue(val))) {
       return true;
     }
     return false;
@@ -382,7 +382,7 @@ export class Instruction {
       case 'R':
         // Register
         ret = parseInt(val[1]);
-        if (ret > 7) {
+        if (val.length > 2 || ret > 7) {
           ret = NaN;
         }
         break;

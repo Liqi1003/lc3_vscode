@@ -23,6 +23,7 @@ import {
 	Label,
 	is_lc3_number
 } from './instruction'
+import { BasicBlock } from "./basicBlock";
 
 
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
@@ -175,6 +176,9 @@ function checkORIGandEND(textDocument: TextDocument, diagnostics: Diagnostic[], 
 	}
 }
 
+
+
+
 // Check for unusable label name (e.g. X123)(Warning), multiple labels at the same memory address (Warning, optional),
 // duplicated labels (Error) and ; after labels without a space (Warning)
 function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
@@ -211,34 +215,85 @@ function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], sett
 
 // Check for code overlap between subroutines and/or main code (Warning)
 function checkCodeOverlap(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
+	let idx: number, i: number;
+	let bb: BasicBlock;
+	// Check for each basic block
+	for (idx = 0; idx < code.basicBlocks.length; idx++) {
+		bb = code.basicBlocks[idx];
+		checkCodeOverlapBB(textDocument, diagnostics, settings, code, bb);
+	}
+}
+
+function checkCodeOverlapBB(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code, bb: BasicBlock) {
 	let i: number;
-	let instruction: Instruction;
-	for (i = 0; i < code.instructions.length; i++) {
-		instruction = code.instructions[i];
-		if (!isNaN(instruction.code_overlap)) {
-			if (instruction.code_overlap == code.start_addr) {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", instruction.line,
-					"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and main code.");
+	// Only explore once for each basic block
+	if(bb.hasExplored) {
+		return;
+	}
+	else {
+		bb.hasExplored = true;
+		if (!isNaN(bb.overlapNumber)) {
+			if (bb.subroutine_num == code.start_addr) {
+				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
+					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and main code.");
+			} else if (bb.overlapNumber == code.start_addr) {
+				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
+					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutine_num).name + " and main code.");
 			} else {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", instruction.line,
-					"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and subroutine " +
-					findLabelByAddress(code, instruction.mem_addr).name + ".");
+				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", bb.instructions[0].line,
+					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and subroutine " +
+					findLabelByAddress(code, bb.instructions[0].mem_addr).name + ".");
 			}
 		}
+	}
+	
+	for (i = 0; i < bb.next_block.length; i++) {
+		checkCodeOverlapBB(textDocument, diagnostics, settings, code, bb.next_block[i]);
 	}
 }
 
 // Check for unreachable code (Warning)
 function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let i: number;
+	let idx: number, i: number;
 	let instruction: Instruction;
+	let bb: BasicBlock;
+	// Register use array. 0 for not used, 1 for last access is write, -1 for last access is read.
+	let reguse: Array<number>; 
+	
+	// Check for unreachable code
 	for (i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
 		if (!instruction.isData() && !instruction.is_found) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}
+	// Check for dead code in each basic block
+	// for (idx = 0; idx < code.basicBlocks.length; idx++) {
+	// 	bb = code.basicBlocks[idx];
+	// 	reguse = [0, 0, 0, 0, 0, 0, 0, 0];
+	// 	for (i = 0; i < bb.instructions.length; i++) {
+	// 		instruction = bb.instructions[i];
+	// 		if (!isNaN(instruction.dest) && reguse[instruction.dest] == 1) {
+	// 			// Dead code: consecutive writes without reads
+	// 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Dead code.", instruction.line,
+	// 				"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and subroutine " +
+	// 				findLabelByAddress(code, instruction.mem_addr).name + ".");
+	// 		}
+	// 		if (!isNaN(instruction.src) && reguse[instruction.src] == 0) {
+	// 			// Uninitialized register before read
+
+	// 		}
+	// 		if (!isNaN(instruction.src2) && reguse[instruction.src2] == 0) {
+	// 			// Uninitialized register before read
+
+	// 		}
+	// 		reguse[instruction.dest] = 1;
+	// 		reguse[instruction.src] = -1;
+	// 		reguse[instruction.src2] = -1;
+	// 	}
+	// }
 }
+
 
 // Check for uncalled subroutines (Warning, provide fix)
 function checkUncalledSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {

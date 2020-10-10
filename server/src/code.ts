@@ -11,19 +11,21 @@ import {
 } from './instruction'
 
 export class Code {
-  public start_addr: number;          // Start address marked by .ORIG
-  public end_addr: number;            // End address marked by .END
-  public instructions: Instruction[]; // Instructions array
-  public labels: Label[];             // Labels array
-  public basicBlocks: BasicBlock[];   // Basic Blocks
-  private line_num: number;           // Keeps track of current line number
-  private mem_addr: number;           // Keep track of current memory address
-  private stack: Stack<Instruction>;  // Stack used for building CFG
+  public start_addr: number;                    // Start address marked by .ORIG
+  public end_addr: number;                      // End address marked by .END
+  public instructions: Instruction[];           // Instructions array
+  private firstInstrIdx: number;                // First instruction index after .ORIG
+  public labels: Label[];                       // Labels array
+  public basicBlocks: BasicBlock[];             // Basic blocks
+  private line_num: number;                     // Keeps track of current line number
+  private mem_addr: number;                     // Keep track of current memory address
+  private stack: Stack<Instruction>;            // Stack used for building CFG
 
   constructor(text: string) {
     this.start_addr = NaN;
     this.end_addr = NaN;
     this.instructions = [];
+    this.firstInstrIdx = NaN;
     this.labels = [];
     this.basicBlocks = [];
     this.line_num = 0;
@@ -56,6 +58,7 @@ export class Code {
       }
       if (line) {
         instruction = new Instruction(line);
+        // TODO: Handle .STRINGZ in multiple line manner
         this.pushInstruction(instruction);
 
         // Handle instructions/directives right behind labels
@@ -68,6 +71,12 @@ export class Code {
         }
       }
       this.line_num++;
+    }
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      if (instruction.mem_addr == this.start_addr) {
+        this.firstInstrIdx = idx;
+      }
     }
     console.log(this);
   }
@@ -253,7 +262,7 @@ export class Code {
     let instruction: Instruction;
     // Analyze main code
     if (this.instructions.length > 0) {
-      this.iterate_code(this.instructions[0], this.start_addr);
+      this.iterate_code(this.instructions[this.firstInstrIdx], this.start_addr);
     }
 
     // Analyze subroutines
@@ -326,7 +335,7 @@ export class Code {
     let idx: number;
 
     // Explore the main routine
-    bb = this.buildOneBlock(this.instructions[0], this.start_addr);
+    bb = this.buildOneBlock(this.instructions[this.firstInstrIdx], this.start_addr);
     this.basicBlocks.push(bb);
 
     // Explore subroutines
@@ -350,7 +359,7 @@ export class Code {
     if (bb != null) {
       // Accessd from another routine
       if (bb.subroutine_num != subroutine_num) {
-        bb.inMultipleRoutine = true;
+        bb.overlapNumber = subroutine_num;
       }
 
       return bb;
@@ -377,11 +386,11 @@ export class Code {
     // One instruction ends the current basic block
     // If it has a next instruction
     if (cur.next_instruction) {
-      bb.next_block.push(this.buildOneBlock(cur.next_instruction, cur.next_instruction.subroutine_num))
+      bb.next_block.push(this.buildOneBlock(cur.next_instruction, subroutine_num))
     }
     // If it has a branch target
     if (cur.br_target) {
-      bb.next_block.push(this.buildOneBlock(cur.br_target, cur.br_target.subroutine_num))
+      bb.next_block.push(this.buildOneBlock(cur.br_target, subroutine_num))
     }
 
     // Return the built basic block
