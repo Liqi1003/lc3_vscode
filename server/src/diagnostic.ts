@@ -355,17 +355,32 @@ function checkJumpToData(textDocument: TextDocument, diagnostics: Diagnostic[], 
 
 // Check for running into data (Warning)
 function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let i: number;
+	let idx: number, i: number;
 	let instruction: Instruction;
 	let next_instruction: Instruction | null;
-	for (i = 0; i < code.instructions.length; i++) {
-		instruction = code.instructions[i];
-		if (!instruction.isData()) {
-			next_instruction = instruction.next_instruction;
-			if (next_instruction && next_instruction.isData()) {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Running into data.", next_instruction.line,
-					"The program may run into data after executing the instruction \"" + instruction.raw_string + "\" at line " + (instruction.line + 1) + ".");
+	for (idx = 0; idx < code.instructions.length; idx++) {
+		instruction = code.instructions[idx];
+		// Check the first instruction
+		if (idx == 0 && instruction.isData()) {
+			// If there is a valid instruction, report error		
+			for (i = 1; i < code.instructions.length; i++) {
+				next_instruction = code.instructions[i];
+				if (!next_instruction.isData()) {
+					generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Running into data.", instruction.line,
+						"The program runs into data at the beginning.");
+					break;
+				}
 			}
+			// For a data file, no warnings
+			if(i == code.instructions.length){
+				return;
+			}
+		}
+		next_instruction = instruction.next_instruction;
+		if (next_instruction && next_instruction.isData()) {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Running into data.", next_instruction.line,
+				"The program may run into data after executing the instruction \"" + instruction.raw_string + "\" at line " + (instruction.line + 1) + ".");
+
 		}
 	}
 }
