@@ -262,11 +262,17 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 	for (idx = 0; idx < bb.instructions.length; idx++) {
 		instruction = bb.instructions[idx];
 		// Not a store operation, give up
-		if (instruction.optype == "ST" ||
-			instruction.optype == "STR" ||
-			instruction.optype == "STI") {
-			// Record saved registers
+		if (instruction.optype != "ST" &&
+			instruction.optype != "STR") {
+			break;
+		}
+		// Record saved registers
+		if (bb.savedReg[instruction.src] == false) {
 			bb.savedReg[instruction.src] = true;
+		} else {
+			// Saved twice, warning
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
+			instruction.line, "You are saving R" + instruction.src + " multiple times, is this a typo?");
 		}
 	}
 	label = findLabelByAddress(code, bb.subroutine_num);
@@ -279,10 +285,83 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 		}
 	}
 	if (str == "") {
-		str = "None."
+		str = "None"
 	}
-	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [], ("Callee-saved Registers: " + str),
-		label.line, "");
+
+	// Send subroutine callee-saved registers info
+	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [], "Subroutine " + label.name,
+		label.line, "Callee-saved Registers: " + str);
+
+	// Check for corresponding restores
+	checkRestoreBB(bb, textDocument, diagnostics, settings, code);
+	for (idx = 0; idx < bb.next_block.length; idx++) {
+		checkRestoreBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
+	}
+}
+
+// Helper function for checking restores, recursive (Warning)
+function checkRestoreBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
+	let idx: number;
+	let instruction: Instruction;
+	let ret_inst: Instruction;
+	let entry: BasicBlock;
+	let str: string;
+	let restoredReg: Array<boolean>;
+
+	if (bb.hasCheckedRestore) {
+		return;
+	}
+	bb.hasCheckedRestore = true;
+
+	for (idx = 0; idx < bb.next_block.length; idx++) {
+		checkRestoreBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
+	}
+
+	// The last block (return block)
+	if (bb.next_block.length == 0) {
+		restoredReg = [false, false, false, false, false, false, false, false];
+		// Skip the last operation (normally should be a RET)
+		for (idx = bb.instructions.length - 2; idx >= 0; idx--) {
+			instruction = bb.instructions[idx];
+			// Not a load operation, give up
+			if (instruction.optype != "LD" &&
+				instruction.optype != "LDR") {
+				break;
+			}
+			// Record saved registers
+			restoredReg[instruction.dest] = true;
+		}
+
+		// Return statement
+		ret_inst = bb.instructions[bb.instructions.length - 1];
+
+		// Mismatch in registers
+		str = "";
+		// Find the entry block
+		entry = findBlockBySubroutine(bb.subroutine_num, code);
+		for (idx = 0; idx < 8; idx++) {
+			// Saved but not restored?
+			if (entry.savedReg[idx] != restoredReg[idx]) {
+				str = str + "R" + idx + " ";
+			}
+		}
+		// Mismatch non-empty, raise warning
+		if (str != "") {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+				ret_inst.line, "Mismatched registers: " + str);
+		}
+	}
+}
+
+function findBlockBySubroutine(subroutine_num: number, code: Code): BasicBlock {
+	let idx: number;
+	let bb: BasicBlock = new BasicBlock();
+	for (idx = 0; idx < code.basicBlocks.length; idx++) {
+		if (code.basicBlocks[idx].subroutine_num == subroutine_num) {
+			bb = code.basicBlocks[idx];
+		}
+	}
+	return bb;
 }
 
 // Check for unreachable code (Warning)
