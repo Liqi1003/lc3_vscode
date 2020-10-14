@@ -1,7 +1,8 @@
 import {
 	Diagnostic,
 	DiagnosticTag,
-	DiagnosticSeverity
+	DiagnosticSeverity,
+	LogTraceNotification
 } from 'vscode-languageserver';
 
 import {
@@ -220,14 +221,15 @@ function checkCodeOverlap(textDocument: TextDocument, diagnostics: Diagnostic[],
 	// Check for each basic block
 	for (idx = 0; idx < code.basicBlocks.length; idx++) {
 		bb = code.basicBlocks[idx];
-		checkCodeOverlapBB(textDocument, diagnostics, settings, code, bb);
+		checkCodeOverlapBB(bb, textDocument, diagnostics, settings, code);
 	}
 }
 
-function checkCodeOverlapBB(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code, bb: BasicBlock) {
+// Helper function, recursive
+function checkCodeOverlapBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let i: number;
 	// Only explore once for each basic block
-	if(bb.hasExplored) {
+	if (bb.hasExplored) {
 		return;
 	}
 	else {
@@ -246,20 +248,17 @@ function checkCodeOverlapBB(textDocument: TextDocument, diagnostics: Diagnostic[
 			}
 		}
 	}
-	
+
 	for (i = 0; i < bb.next_block.length; i++) {
-		checkCodeOverlapBB(textDocument, diagnostics, settings, code, bb.next_block[i]);
+		checkCodeOverlapBB(bb.next_block[i], textDocument, diagnostics, settings, code);
 	}
 }
 
 // Check for unreachable code (Warning)
 function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let idx: number, i: number;
+	let i: number;
 	let instruction: Instruction;
-	let bb: BasicBlock;
-	// Register use array. 0 for not used, 1 for last access is write, -1 for last access is read.
-	let reguse: Array<number>; 
-	
+
 	// Check for unreachable code
 	for (i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
@@ -268,32 +267,54 @@ function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: D
 		}
 	}
 	// Check for dead code in each basic block
-	// for (idx = 0; idx < code.basicBlocks.length; idx++) {
-	// 	bb = code.basicBlocks[idx];
-	// 	reguse = [0, 0, 0, 0, 0, 0, 0, 0];
-	// 	for (i = 0; i < bb.instructions.length; i++) {
-	// 		instruction = bb.instructions[i];
-	// 		if (!isNaN(instruction.dest) && reguse[instruction.dest] == 1) {
-	// 			// Dead code: consecutive writes without reads
-	// 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Dead code.", instruction.line,
-	// 				"This instruction is shared by subroutine " + findLabelByAddress(code, instruction.code_overlap).name + " and subroutine " +
-	// 				findLabelByAddress(code, instruction.mem_addr).name + ".");
-	// 		}
-	// 		if (!isNaN(instruction.src) && reguse[instruction.src] == 0) {
-	// 			// Uninitialized register before read
-
-	// 		}
-	// 		if (!isNaN(instruction.src2) && reguse[instruction.src2] == 0) {
-	// 			// Uninitialized register before read
-
-	// 		}
-	// 		reguse[instruction.dest] = 1;
-	// 		reguse[instruction.src] = -1;
-	// 		reguse[instruction.src2] = -1;
-	// 	}
-	// }
+	for (i = 0; i < code.basicBlocks.length; i++) {
+		checkDeadCodeBB(code.basicBlocks[i], textDocument, diagnostics, settings, code);
+	}
 }
 
+// Helper function, recursive
+function checkDeadCodeBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
+	let idx: number;
+	let instruction: Instruction;
+
+	if (bb.hasCheckedDeadCode) {
+		return;
+	}
+	bb.hasCheckedDeadCode = true;
+	for (idx = 0; idx < bb.instructions.length; idx++) {
+		instruction = bb.instructions[idx];
+		// Consecutive writes to the same reg
+		if (!isNaN(instruction.dest) && !srcEqDest(instruction) && bb.reguse[instruction.dest] == 1) {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Dead code.", instruction.line,
+				"Overwriting the value without using the content in R" + instruction.dest + " .");
+		}
+		if (!isNaN(instruction.src)) {
+			bb.reguse[instruction.src] = -1;
+		}
+		if (!isNaN(instruction.src2)) {
+			bb.reguse[instruction.src2] = -1;
+		}
+		if (!isNaN(instruction.dest)) {
+			bb.reguse[instruction.dest] = 1;
+		}
+	}
+
+	// Check for next block
+	for (idx = 0; idx < bb.next_block.length; idx++) {
+		checkDeadCodeBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
+	}
+}
+
+// Returns whether one of the source register equals destnation register
+function srcEqDest(inst: Instruction): boolean {
+	if (isNaN(inst.dest)) {
+		return false;
+	}
+	if ((!isNaN(inst.src) && inst.src == inst.dest) || (!isNaN(inst.src2) && inst.src2 == inst.dest)) {
+		return true;
+	}
+	return false;
+}
 
 // Check for uncalled subroutines (Warning, provide fix)
 function checkUncalledSubroutines(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
@@ -372,7 +393,7 @@ function checkRunningIntoData(textDocument: TextDocument, diagnostics: Diagnosti
 				}
 			}
 			// For a data file, no warnings
-			if(i == code.instructions.length){
+			if (i == code.instructions.length) {
 				return;
 			}
 		}
