@@ -8,9 +8,10 @@ export class BasicBlock {
 	public overlapNumber: number;					// Subroutine ID of the other subroutine, if any
 	public hasExplored: boolean;					// Flag indicating a bb has been explored
 	public hasCheckedDeadCode: boolean; 	// Flag indicating a bb has been checked for dead code
-	public next_block: BasicBlock[];
-	public reguse: Array<number>;	// Register use array. 0 for not used, 1 for last access is write, -1 for last access is read.
-	
+	public next_block: BasicBlock[];			// Next block pointer
+	public reguse: Array<number>;					// Register use array. 0 for not used, 1 for last access is write, -1 for last access is read
+	public savedReg: Array<boolean>; 			// Register save array. true for callee-saved
+
 	constructor() {
 		this.instructions = [];
 		this.subroutine_num = NaN;		
@@ -19,6 +20,7 @@ export class BasicBlock {
 		this.hasCheckedDeadCode = false;
 		this.next_block = [];
 		this.reguse = [0,0,0,0,0,0,0,0];
+		this.savedReg = [false, false, false, false, false, false, false, false];
 	}
 
 	// Push an instruction into the basic block

@@ -2,7 +2,6 @@ import {
 	Diagnostic,
 	DiagnosticTag,
 	DiagnosticSeverity,
-	LogTraceNotification
 } from 'vscode-languageserver';
 
 import {
@@ -11,21 +10,23 @@ import {
 
 import {
 	ExtensionSettings,
-	hasDiagnosticRelatedInformationCapability
+	hasDiagnosticRelatedInformationCapability,
 } from './server';
 
 import {
-	Code
+	Code,
 } from './code';
 
 import {
 	TRAPVEC,
 	Instruction,
 	Label,
-	is_lc3_number
+	is_lc3_number,
 } from './instruction'
-import { BasicBlock } from "./basicBlock";
 
+import {
+	BasicBlock,
+} from "./basicBlock";
 
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
@@ -38,6 +39,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	let instruction: Instruction;
 	let label_id: number;
 
+	/** Global checking */
 	// Check for labels
 	checkLabels(textDocument, diagnostics, settings, code);
 
@@ -45,20 +47,30 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 	checkUnreachableInstructions(textDocument, diagnostics, settings, code);
 	checkUncalledSubroutines(textDocument, diagnostics, settings, code);
 
-	// Check for code overlap
-	checkCodeOverlap(textDocument, diagnostics, settings, code);
-
 	// Check for code before/after .ORIG/.END
 	checkORIGandEND(textDocument, diagnostics, settings, code);
 
 	// Check for running into data
 	checkRunningIntoData(textDocument, diagnostics, settings, code);
 
-	// Single line of code checkings (not block of codes)
+	/** Block checking */
+	for (idx = 0; idx < code.basicBlocks.length; idx++) {
+		// Check for dead code 
+		checkDeadCodeBB(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
+		// Check for code overlap between subroutines and/or main code
+		checkCodeOverlapBB(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
+		if (code.basicBlocks[idx].subroutine_num != code.start_addr) {
+			// Check for caller/callee saved registers
+			checkCalleeSavedRegs(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
+		}
+
+	}
+
+	/** Single line of code checking */
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 
-		// Check for incomplete instructions
+		// Check for incomplete/illegal instructions
 		if (instruction.incomplete) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line, "");
 		}
@@ -131,7 +143,6 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 						meant to write a decimal number, add a leading #.");
 				}
 				break;
-
 			default:
 				break;
 		}
@@ -178,9 +189,7 @@ function checkORIGandEND(textDocument: TextDocument, diagnostics: Diagnostic[], 
 }
 
 
-
-
-// Check for unusable label name (e.g. X123)(Warning), multiple labels at the same memory address (Warning, optional),
+// Check for unusable label name (e.g. X123) (Warning), multiple labels at the same memory address (Warning, optional),
 // duplicated labels (Error) and ; after labels without a space (Warning)
 function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let idx: number, i: number;
@@ -214,18 +223,7 @@ function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], sett
 	}
 }
 
-// Check for code overlap between subroutines and/or main code (Warning)
-function checkCodeOverlap(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let idx: number, i: number;
-	let bb: BasicBlock;
-	// Check for each basic block
-	for (idx = 0; idx < code.basicBlocks.length; idx++) {
-		bb = code.basicBlocks[idx];
-		checkCodeOverlapBB(bb, textDocument, diagnostics, settings, code);
-	}
-}
-
-// Helper function, recursive
+// Helper function for checking overlap, recursive (Warning)
 function checkCodeOverlapBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let i: number;
 	// Only explore once for each basic block
@@ -254,6 +252,39 @@ function checkCodeOverlapBB(bb: BasicBlock, textDocument: TextDocument, diagnost
 	}
 }
 
+// Check for callee-saved registers (Hint)
+function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
+	let idx: number;
+	let instruction: Instruction;
+	let label: Label;
+	let str: string;
+
+	for (idx = 0; idx < bb.instructions.length; idx++) {
+		instruction = bb.instructions[idx];
+		// Not a store operation, give up
+		if (instruction.optype == "ST" ||
+			instruction.optype == "STR" ||
+			instruction.optype == "STI") {
+			// Record saved registers
+			bb.savedReg[instruction.src] = true;
+		}
+	}
+	label = findLabelByAddress(code, bb.subroutine_num);
+	// Generate string
+	str = "";
+	// R7 is always caller-saved
+	for (idx = 0; idx < 7; idx++) {
+		if (bb.savedReg[idx]) {
+			str = str + "R" + idx + " ";
+		}
+	}
+	if (str == "") {
+		str = "None."
+	}
+	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [], ("Callee-saved Registers: " + str),
+		label.line, "");
+}
+
 // Check for unreachable code (Warning)
 function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let i: number;
@@ -266,13 +297,9 @@ function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: D
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}
-	// Check for dead code in each basic block
-	for (i = 0; i < code.basicBlocks.length; i++) {
-		checkDeadCodeBB(code.basicBlocks[i], textDocument, diagnostics, settings, code);
-	}
 }
 
-// Helper function, recursive
+// Helper function for checking dead code, recursive (Warning)
 function checkDeadCodeBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let idx: number;
 	let instruction: Instruction;
