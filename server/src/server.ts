@@ -93,7 +93,8 @@ connection.onInitialized(() => {
 export interface ExtensionSettings {
   showWarnings: boolean;
   showErrors: boolean;
-  enableMultipleLabels: boolean;
+  showMultipleLabels: boolean;
+  showIncompleteInstructions: boolean;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
@@ -102,7 +103,8 @@ export interface ExtensionSettings {
 const defaultSettings: ExtensionSettings = {
   showWarnings: true,
   showErrors: true,
-  enableMultipleLabels: true
+  showMultipleLabels: true,
+  showIncompleteInstructions: false
 };
 let globalSettings: ExtensionSettings = defaultSettings;
 

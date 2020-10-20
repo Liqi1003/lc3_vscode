@@ -11,27 +11,17 @@ import {
 } from './instruction'
 
 export class Code {
-  public start_addr: number;                    // Start address marked by .ORIG
-  public end_addr: number;                      // End address marked by .END
-  public instructions: Instruction[];           // Instructions array
-  private firstInstrIdx: number;                // First instruction index after .ORIG
-  public labels: Label[];                       // Labels array
-  public basicBlocks: BasicBlock[];             // Basic blocks
-  private line_num: number;                     // Keeps track of current line number
-  private mem_addr: number;                     // Keep track of current memory address
-  private stack: Stack<Instruction>;            // Stack used for building CFG
+  public instructions: Instruction[] = [];                      // Instructions array
+  public labels: Label[] = [];                                  // Labels array
+  public basicBlocks: BasicBlock[] = [];                        // Basic blocks
+  public start_addr: number = NaN;                              // Start address marked by .ORIG
+  public end_addr: number = NaN;                                // End address marked by .END
+  private firstInstrIdx: number = NaN;                          // First instruction index after .ORIG
+  private line_num: number = 0;                                 // Keeps track of current line number
+  private mem_addr: number = NaN;                               // Keep track of current memory address
+  private stack: Stack<Instruction> = new Stack<Instruction>(); // Stack used for building CFG
 
   constructor(text: string) {
-    this.start_addr = NaN;
-    this.end_addr = NaN;
-    this.instructions = [];
-    this.firstInstrIdx = NaN;
-    this.labels = [];
-    this.basicBlocks = [];
-    this.line_num = 0;
-    this.mem_addr = NaN;
-    this.stack = new Stack<Instruction>();
-
     this.buildInstructions(text);
     this.linkLabels();
     this.analyzeCFG();
@@ -54,16 +44,36 @@ export class Code {
       for (i = 0; i < line.length; i++) {
         if (line[0] == ';' || (line[i] == ';' && (line[i - 1] == ' ' || line[i - 1] == '\t'))) {
           line = line.slice(0, i);
+          break;
         }
       }
       if (line) {
         instruction = new Instruction(line);
         // TODO: Handle .STRINGZ in multiple line manner
+        if (instruction.optype == ".STRINGZ" && instruction.mem &&
+          instruction.mem[instruction.mem.length - 1] != '"') {
+          while (++idx < lines.length) {
+            this.line_num++
+            instruction.mem = instruction.mem + '\n';
+            line = lines[idx];
+            line = line.trim();
+            for (i = 0; i < line.length; i++) {
+              if (line[i] == ';') {
+                line = line.slice(0, i);
+                break;
+              }
+            }
+            instruction.mem = instruction.mem + line;
+            if (line[line.length - 1] == '"') {
+              break;
+            }
+          }
+        }
         this.pushInstruction(instruction);
 
         // Handle instructions/directives right behind labels
         if (instruction.optype == "LABEL") {
-          line = line.slice(line.split(/\s/)[0].length + 1).trim();
+          line = line.slice(line.split(/\s/)[0].length).trim();
           if (line) {
             instruction = new Instruction(line);
             this.pushInstruction(instruction);
@@ -114,6 +124,7 @@ export class Code {
         break;
       case ".STRINGZ":
         if (!isNaN(instruction.mem.length)) {
+          instruction.mem.slice(1, instruction.mem.length - 1);
           this.mem_addr += instruction.mem.length;
         }
         for (i = 0; i < instruction.mem.length; i++) {
@@ -122,6 +133,7 @@ export class Code {
             this.mem_addr--;
           }
         }
+        instruction.raw_string = ".STRINGZ " + instruction.mem;
         this.instructions.push(instruction);
         break;
       case "LABEL":
@@ -129,15 +141,6 @@ export class Code {
         this.mem_addr--;
         label = new Label(instruction);
         this.labels.push(label);
-        break;
-      case "BR":
-        if (instruction.illegal_cc) {
-          label = new Label(instruction);
-          label.isBR = true;
-          this.labels.push(label);
-        } else {
-          this.instructions.push(instruction);
-        }
         break;
       default:
         this.instructions.push(instruction);

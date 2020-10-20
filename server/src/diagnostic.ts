@@ -71,7 +71,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 		instruction = code.instructions[idx];
 
 		// Check for incomplete/illegal instructions
-		if (instruction.incomplete) {
+		if (settings.showIncompleteInstructions && instruction.incomplete) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line, "");
 		}
 
@@ -88,25 +88,33 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				}
 				break;
 			case "BR":
-				label_id = checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
-				if (label_id >= 0) {
-					checkJumpToData(textDocument, diagnostics, settings, instruction, code, label_id);
+				if (instruction.mem) {
+					label_id = checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
+					if (label_id >= 0) {
+						checkJumpToData(textDocument, diagnostics, settings, instruction, code, label_id);
+					}
 				}
 				break;
 			case "JSR":
-				label_id = checkPCoffset(textDocument, diagnostics, settings, instruction, code, 11);
-				if (label_id >= 0) {
-					checkJumpToData(textDocument, diagnostics, settings, instruction, code, label_id);
+				if (instruction.mem) {
+					label_id = checkPCoffset(textDocument, diagnostics, settings, instruction, code, 11);
+					if (label_id >= 0) {
+						checkJumpToData(textDocument, diagnostics, settings, instruction, code, label_id);
+					}
 				}
 				break;
 			case "LEA":
-				checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
+				if (instruction.mem) {
+					checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
+				}
 				break;
 			case "LD":
 			case "ST":
 			case "LDI":
 			case "STI":
-				checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
+				if (instruction.mem) {
+					checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
+				}
 				break;
 			case "LDR":
 			case "STR":
@@ -202,7 +210,7 @@ function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], sett
 				"This label name will be recognized as a number by the assembler, it will not be usable in any other instructions.");
 		}
 		// Check for multiple labels at the same line
-		if (settings.enableMultipleLabels && idx + 1 < code.labels.length && label.mem_addr == code.labels[idx + 1].mem_addr) {
+		if (settings.showMultipleLabels && idx + 1 < code.labels.length && label.mem_addr == code.labels[idx + 1].mem_addr) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Multiple label at the same memory location.", label.line,
 				"Label " + label.name + " and " + code.labels[idx + 1].name + " are at the same memory location.");
 		}
@@ -272,7 +280,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 		} else {
 			// Saved twice, warning
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
-			instruction.line, "You are saving R" + instruction.src + " multiple times, is this a typo?");
+				instruction.line, "You are saving R" + instruction.src + " multiple times, is this a typo?");
 		}
 	}
 	label = findLabelByAddress(code, bb.subroutine_num);
@@ -289,7 +297,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 	}
 
 	// Send subroutine callee-saved registers info
-	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [], "Subroutine " + label.name,
+	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Information, [], "Subroutine " + label.name,
 		label.line, "Callee-saved Registers: " + str);
 
 	// Check for corresponding restores
