@@ -40,6 +40,7 @@ export class Instruction {
   public is_found: boolean = false;                     // Flag for found
   public incoming_arcs: number = 0;                     // Number of incoming arcs
   public in_block: BasicBlock | null = null;            // Basic block containing the instruction
+  public isDead: boolean = false;                       // Flag for dead code
 
   constructor(inst: string) {
     // Default values
@@ -117,7 +118,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || this.isReg(this.mem)) {
+        if (this.dest == NaN || is_lc3_register(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -143,7 +144,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (this.dest == NaN || this.isReg(this.mem)) {
+        if (this.dest == NaN || is_lc3_register(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -173,7 +174,7 @@ export class Instruction {
         } else {
           this.incomplete = true;
         }
-        if (isNaN(this.src) || this.isReg(this.mem)) {
+        if (isNaN(this.src) || is_lc3_register(this.mem)) {
           this.incomplete = true;
         }
         break;
@@ -308,9 +309,9 @@ export class Instruction {
         break;
     }
 
-    // For memory instructions, keep ';', for labels, remove ';'
+    // Remove ; in instructions, indicate there is a semicolon
     // This is to accomodate for the lc3as behavior, may not compatiable with v3
-    if (this.mem && !this.isMemType()) {
+    if (this.mem) {
       for (i = 0; i < this.mem.length; i++) {
         if (this.mem[i] == ';') {
           this.mem = this.mem.slice(0, i);
@@ -365,13 +366,6 @@ export class Instruction {
     }
   }
 
-  // Helper function to decide whether the parameter is a register name
-  private isReg(val: string): boolean {
-    if (val.length == 2 && val[0] == 'R' && !isNaN(this.parseValue(val))) {
-      return true;
-    }
-    return false;
-  }
 
   // Helper function to parse values from a string
   // Possible value type: Register, decimal, hexadecimal, binary
@@ -478,6 +472,12 @@ export function is_lc3_number(str: string): boolean {
   const regb = /^[0-1]+$/;
   const regd = /^#[0-9]+$/;
   return (str.match(regx) != null || str.match(regd) != null || str.match(regb) != null);
+}
+
+// Returns true if the input string is a lc3 register: R[0-7]
+export function is_lc3_register(str: string): boolean {
+  const reg = /^r[0-7]$/i;
+  return str.match(reg) != null;
 }
 
 // Returns the trap vector

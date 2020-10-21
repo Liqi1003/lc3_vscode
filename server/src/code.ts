@@ -28,6 +28,7 @@ export class Code {
     this.markSubroutines(text);
     this.analyzeCode();
     this.buildBlocks();
+    this.analyzeBlocks();
   }
 
   private buildInstructions(text: string) {
@@ -49,7 +50,7 @@ export class Code {
       }
       if (line) {
         instruction = new Instruction(line);
-        // TODO: Handle .STRINGZ in multiple line manner
+        // Handle .STRINGZ in multiple line manner
         if (instruction.optype == ".STRINGZ" && instruction.mem &&
           instruction.mem[instruction.mem.length - 1] != '"') {
           while (++idx < lines.length) {
@@ -73,7 +74,7 @@ export class Code {
 
         // Handle instructions/directives right behind labels
         if (instruction.optype == "LABEL") {
-          line = line.slice(line.split(/\s/)[0].length).trim();
+          line = line.slice(instruction.mem.length).trim();
           if (line) {
             instruction = new Instruction(line);
             this.pushInstruction(instruction);
@@ -82,10 +83,16 @@ export class Code {
       }
       this.line_num++;
     }
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
-      if (instruction.mem_addr == this.start_addr) {
-        this.firstInstrIdx = idx;
+
+    // Mark the first instruction
+    if (isNaN(this.start_addr)) {
+      this.firstInstrIdx = 0;
+    } else {
+      for (idx = 0; idx < this.instructions.length; idx++) {
+        instruction = this.instructions[idx];
+        if (instruction.mem_addr == this.start_addr) {
+          this.firstInstrIdx = idx;
+        }
       }
     }
     console.log(this);
@@ -398,5 +405,13 @@ export class Code {
 
     // Return the built basic block
     return bb;
+  }
+
+  private analyzeBlocks() {
+    let idx: number;
+    this.basicBlocks[0].checkDeadCode();
+    for (idx = 1; idx < this.basicBlocks.length; idx++) {
+      this.basicBlocks[idx].checkRestoredReg();
+    }
   }
 }

@@ -22,6 +22,7 @@ import {
 	Instruction,
 	Label,
 	is_lc3_number,
+	is_lc3_register,
 } from './instruction'
 
 import {
@@ -55,24 +56,34 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 
 	/** Block checking */
 	for (idx = 0; idx < code.basicBlocks.length; idx++) {
-		// Check for dead code 
-		checkDeadCodeBB(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
 		// Check for code overlap between subroutines and/or main code
 		checkCodeOverlapBB(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
 		if (code.basicBlocks[idx].subroutine_num != code.start_addr) {
 			// Check for caller/callee saved registers
 			checkCalleeSavedRegs(code.basicBlocks[idx], textDocument, diagnostics, settings, code);
 		}
-
 	}
 
 	/** Single line of code checking */
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 
+		// Skip the instruction if it is not found
+		if (!instruction.is_found) {
+			continue;
+		}
+
 		// Check for incomplete/illegal instructions
 		if (settings.showIncompleteInstructions && instruction.incomplete) {
-			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line, "");
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line,
+				instruction.raw_string + " is incomplete/illegal");
+			continue;
+		}
+
+		// Check for dead code
+		if (instruction.isDead) {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Dead code.", instruction.line,
+				"Overwriting the value without using the content in R" + instruction.dest + ".");
 		}
 
 		// Checking each line of code based on operation type
@@ -196,7 +207,6 @@ function checkORIGandEND(textDocument: TextDocument, diagnostics: Diagnostic[], 
 	}
 }
 
-
 // Check for unusable label name (e.g. X123) (Warning), multiple labels at the same memory address (Warning, optional),
 // duplicated labels (Error) and ; after labels without a space (Warning)
 function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
@@ -205,9 +215,9 @@ function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], sett
 	for (idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		// Check for unusable label name
-		if (is_lc3_number(label.name)) {
+		if (is_lc3_number(label.name) || is_lc3_register(label.name)) {
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number.", label.line,
-				"This label name will be recognized as a number by the assembler, it will not be usable in any other instructions.");
+				"This label name will be recognized as a number or register name by the assembler, it will not be usable in any other instructions.");
 		}
 		// Check for multiple labels at the same line
 		if (settings.showMultipleLabels && idx + 1 < code.labels.length && label.mem_addr == code.labels[idx + 1].mem_addr) {
@@ -284,80 +294,34 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 		}
 	}
 	label = findLabelByAddress(code, bb.subroutine_num);
+	
 	// Generate string
 	str = "";
 	// R7 is always caller-saved
 	for (idx = 0; idx < 7; idx++) {
-		if (bb.savedReg[idx]) {
+		if (bb.savedReg[idx] && bb.restoredReg[idx]) {
 			str = str + "R" + idx + " ";
 		}
 	}
 	if (str == "") {
 		str = "None"
 	}
-
 	// Send subroutine callee-saved registers info
 	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Information, [], "Subroutine " + label.name,
 		label.line, "Callee-saved Registers: " + str);
 
-	// Check for corresponding restores
-	checkRestoreBB(bb, textDocument, diagnostics, settings, code);
-	for (idx = 0; idx < bb.next_block.length; idx++) {
-		checkRestoreBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
-	}
-}
-
-// Helper function for checking restores, recursive (Warning)
-function checkRestoreBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let idx: number;
-	let instruction: Instruction;
-	let ret_inst: Instruction;
-	let entry: BasicBlock;
-	let str: string;
-	let restoredReg: Array<boolean>;
-
-	if (bb.hasCheckedRestore) {
-		return;
-	}
-	bb.hasCheckedRestore = true;
-
-	for (idx = 0; idx < bb.next_block.length; idx++) {
-		checkRestoreBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
-	}
-
-	// The last block (return block)
-	if (bb.next_block.length == 0) {
-		restoredReg = [false, false, false, false, false, false, false, false];
-		// Skip the last operation (normally should be a RET)
-		for (idx = bb.instructions.length - 2; idx >= 0; idx--) {
-			instruction = bb.instructions[idx];
-			// Not a load operation, give up
-			if (instruction.optype != "LD" &&
-				instruction.optype != "LDR") {
-				break;
-			}
-			// Record saved registers
-			restoredReg[instruction.dest] = true;
+	// Mismatch in registers
+	str = "";
+	for (idx = 0; idx < 8; idx++) {
+		// Saved but not restored?
+		if (bb.savedReg[idx] != bb.restoredReg[idx]) {
+			str = str + "R" + idx + " ";
 		}
-
-		// Return statement
-		ret_inst = bb.instructions[bb.instructions.length - 1];
-
-		// Mismatch in registers
-		str = "";
-		// Find the entry block
-		entry = findBlockBySubroutine(bb.subroutine_num, code);
-		for (idx = 0; idx < 8; idx++) {
-			// Saved but not restored?
-			if (entry.savedReg[idx] != restoredReg[idx]) {
-				str = str + "R" + idx + " ";
-			}
-		}
-		// Mismatch non-empty, raise warning
-		if (str != "") {
-			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-				ret_inst.line, "Mismatched registers: " + str);
-		}
+	}
+	// Mismatch non-empty, raise warning
+	if (str != "") {
+		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+		label.line, "Mismatched registers: " + str);
 	}
 }
 
@@ -384,50 +348,6 @@ function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: D
 			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}
-}
-
-// Helper function for checking dead code, recursive (Warning)
-function checkDeadCodeBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let idx: number;
-	let instruction: Instruction;
-
-	if (bb.hasCheckedDeadCode) {
-		return;
-	}
-	bb.hasCheckedDeadCode = true;
-	for (idx = 0; idx < bb.instructions.length; idx++) {
-		instruction = bb.instructions[idx];
-		// Consecutive writes to the same reg
-		if (!isNaN(instruction.dest) && !srcEqDest(instruction) && bb.reguse[instruction.dest] == 1) {
-			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Dead code.", instruction.line,
-				"Overwriting the value without using the content in R" + instruction.dest + " .");
-		}
-		if (!isNaN(instruction.src)) {
-			bb.reguse[instruction.src] = -1;
-		}
-		if (!isNaN(instruction.src2)) {
-			bb.reguse[instruction.src2] = -1;
-		}
-		if (!isNaN(instruction.dest)) {
-			bb.reguse[instruction.dest] = 1;
-		}
-	}
-
-	// Check for next block
-	for (idx = 0; idx < bb.next_block.length; idx++) {
-		checkDeadCodeBB(bb.next_block[idx], textDocument, diagnostics, settings, code);
-	}
-}
-
-// Returns whether one of the source register equals destnation register
-function srcEqDest(inst: Instruction): boolean {
-	if (isNaN(inst.dest)) {
-		return false;
-	}
-	if ((!isNaN(inst.src) && inst.src == inst.dest) || (!isNaN(inst.src2) && inst.src2 == inst.dest)) {
-		return true;
-	}
-	return false;
 }
 
 // Check for uncalled subroutines (Warning, provide fix)
