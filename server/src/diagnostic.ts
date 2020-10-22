@@ -26,7 +26,8 @@ import {
 } from './instruction'
 
 import {
-	BasicBlock,
+	BasicBlock, 
+	bbFlag,
 } from "./basicBlock";
 
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
@@ -100,6 +101,7 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 				break;
 			case "BR":
 				if (instruction.mem) {
+					checkBRpossibility(textDocument, diagnostics, settings, instruction, code);
 					label_id = checkPCoffset(textDocument, diagnostics, settings, instruction, code, 9);
 					if (label_id >= 0) {
 						checkJumpToData(textDocument, diagnostics, settings, instruction, code, label_id);
@@ -167,6 +169,20 @@ export function generateDiagnostics(textDocument: TextDocument, settings: Extens
 		}
 	}
 	return diagnostics;
+}
+
+// Check for always BR and redundant conditions (Warning)
+function checkBRpossibility(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, instruction: Instruction, code: Code){
+	if(instruction.n && instruction.z && instruction.p){
+		return;
+	}
+	if(instruction.br_possibility == 1){
+		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Branch always taken.", instruction.line,
+				"The condition of this branch is always true, use BR/BRnzp for better readability.");
+	} else if(instruction.br_possibility == -1){
+		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Redundant condition.", instruction.line,
+				"Some condition(s) of this branch is always false, remove them for better readability.");
+	}
 }
 
 function findLabelByAddress(code: Code, address: number): Label {
@@ -243,37 +259,38 @@ function checkLabels(textDocument: TextDocument, diagnostics: Diagnostic[], sett
 
 // Helper function for checking overlap, recursive (Warning)
 function checkCodeOverlapBB(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let i: number;
 	// Only explore once for each basic block
-	if (bb.hasExplored) {
+	if (bb.flags & bbFlag.hasExplored) {
 		return;
 	}
-	else {
-		bb.hasExplored = true;
-		if (!isNaN(bb.overlapNumber)) {
-			if (bb.subroutine_num == code.start_addr) {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
-					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and main code.");
-			} else if (bb.overlapNumber == code.start_addr) {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
-					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutine_num).name + " and main code.");
-			} else {
-				generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", bb.instructions[0].line,
-					"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and subroutine " +
-					findLabelByAddress(code, bb.instructions[0].mem_addr).name + ".");
-			}
+	bb.flags = bb.flags | bbFlag.hasExplored;
+	if (!isNaN(bb.overlapNumber)) {
+		if (bb.subroutine_num == code.start_addr) {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
+				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and main code.");
+		} else if (bb.overlapNumber == code.start_addr) {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
+				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutine_num).name + " and main code.");
+		} else {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", bb.instructions[0].line,
+				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and subroutine " +
+				findLabelByAddress(code, bb.instructions[0].mem_addr).name + ".");
 		}
 	}
 
-	for (i = 0; i < bb.next_block.length; i++) {
-		checkCodeOverlapBB(bb.next_block[i], textDocument, diagnostics, settings, code);
+	if(bb.next_block){
+		checkCodeOverlapBB(bb.next_block, textDocument, diagnostics, settings, code);
+	}
+	if(bb.br_block){
+		checkCodeOverlapBB(bb.br_block, textDocument, diagnostics, settings, code);
 	}
 }
 
-// Check for callee-saved registers (Hint)
+// Check for callee-saved registers (Hint) and mismatch (Warning)
 function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
-	let idx: number;
-	let instruction: Instruction;
+	let idx: number, i: number;
+	let instruction: Instruction, ret: Instruction;
+	let exit: BasicBlock;
 	let label: Label;
 	let str: string;
 
@@ -293,8 +310,12 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 				instruction.line, "You are saving R" + instruction.src + " multiple times, is this a typo?");
 		}
 	}
+
+	for(idx = 0 ; idx < bb.exit_block.length; idx++){
+		andWithRestore(bb.restoredReg, bb.savedReg, bb.exit_block[idx].restoredReg);
+	}
+
 	label = findLabelByAddress(code, bb.subroutine_num);
-	
 	// Generate string
 	str = "";
 	// R7 is always caller-saved
@@ -310,18 +331,30 @@ function checkCalleeSavedRegs(bb: BasicBlock, textDocument: TextDocument, diagno
 	generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Information, [], "Subroutine " + label.name,
 		label.line, "Callee-saved Registers: " + str);
 
-	// Mismatch in registers
-	str = "";
-	for (idx = 0; idx < 8; idx++) {
-		// Saved but not restored?
-		if (bb.savedReg[idx] != bb.restoredReg[idx]) {
-			str = str + "R" + idx + " ";
+	// Check for each exit block
+	for (idx = 0; idx < bb.exit_block.length; idx++) {
+		exit = bb.exit_block[idx];
+		ret = exit.instructions[exit.instructions.length - 1];
+		// Mismatch in registers
+		str = "";
+		for (i = 0; i < 8; i++) {
+			// Saved but not restored?
+			if (bb.savedReg[i] !== exit.restoredReg[i]) {
+				str = str + "R" + i + " ";
+			}
+		}
+		// Mismatch non-empty, raise warning
+		if (str != "") {
+			generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+				ret.line, "Mismatched registers: " + str);
 		}
 	}
-	// Mismatch non-empty, raise warning
-	if (str != "") {
-		generateDiagnostic(textDocument, diagnostics, settings, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-		label.line, "Mismatched registers: " + str);
+}
+
+function andWithRestore(new_restore:Array<boolean> ,save: Array<boolean>, restore: Array<boolean>){
+	let i: number;
+	for(i = 0; i < 8; i++) {
+		new_restore[i] = save[i] && restore[i];
 	}
 }
 
@@ -336,7 +369,7 @@ function findBlockBySubroutine(subroutine_num: number, code: Code): BasicBlock {
 	return bb;
 }
 
-// Check for unreachable code (Warning)
+// Check for unreachable code (Hint)
 function checkUnreachableInstructions(textDocument: TextDocument, diagnostics: Diagnostic[], settings: ExtensionSettings, code: Code) {
 	let i: number;
 	let instruction: Instruction;

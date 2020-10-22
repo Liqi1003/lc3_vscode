@@ -41,6 +41,7 @@ export class Instruction {
   public incoming_arcs: number = 0;                     // Number of incoming arcs
   public in_block: BasicBlock | null = null;            // Basic block containing the instruction
   public isDead: boolean = false;                       // Flag for dead code
+  public br_possibility: number = 0;                    // Possibility of branch. 0 for conditional, 1 for always, -1 for never
 
   constructor(inst: string) {
     // Default values
@@ -366,6 +367,22 @@ export class Instruction {
     }
   }
 
+  public setCC(): boolean{
+    switch(this.optype){
+      case "ADD":
+      case "AND":
+      case "LD":
+      case "LDI":
+      case "LDR":
+      case "NOT":
+        return true;
+      // LC3v3, lea not set cc
+      case "LEA":
+        return true;
+      default:
+        return false;
+    }
+  }
 
   // Helper function to parse values from a string
   // Possible value type: Register, decimal, hexadecimal, binary

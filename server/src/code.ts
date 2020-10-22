@@ -396,11 +396,11 @@ export class Code {
     // One instruction ends the current basic block
     // If it has a next instruction
     if (cur.next_instruction) {
-      bb.next_block.push(this.buildOneBlock(cur.next_instruction, subroutine_num))
+      bb.next_block = this.buildOneBlock(cur.next_instruction, subroutine_num);
     }
     // If it has a branch target
     if (cur.br_target) {
-      bb.next_block.push(this.buildOneBlock(cur.br_target, subroutine_num))
+      bb.br_block = this.buildOneBlock(cur.br_target, subroutine_num);
     }
 
     // Return the built basic block
@@ -409,9 +409,28 @@ export class Code {
 
   private analyzeBlocks() {
     let idx: number;
-    this.basicBlocks[0].checkDeadCode();
-    for (idx = 1; idx < this.basicBlocks.length; idx++) {
-      this.basicBlocks[idx].checkRestoredReg();
+    for (idx = 0; idx < this.basicBlocks.length; idx++) {
+      this.basicBlocks[idx].checkDeadCode();
+      // this.basicBlocks[idx].checkCC([false, false, false]);
+      // Only check for save-restore registers in subroutines
+      if (idx > 0) {
+        this.basicBlocks[idx].checkRestoredReg(this.basicBlocks[idx]);
+      }
     }
   }
+}
+
+function has_change(a: Array<Array<boolean>>, b: Array<Array<boolean>>): boolean {
+  let i: number, j: number;
+  if (a.length != b.length) {
+    return true;
+  }
+  for (i = 0; i < a.length; i++) {
+    for (j = 0; j < 8; j++) {
+      if (a[i][j] != b[i][j]) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
