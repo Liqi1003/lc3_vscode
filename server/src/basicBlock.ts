@@ -13,17 +13,17 @@ import {
 
 export class BasicBlock {
 	public instructions: Instruction[] = []; 			// Instruction at the same memory address
-	public subroutine_num: number = NaN;					// Subroutine ID
+	public subroutineNum: number = NaN;					// Subroutine ID
 	public overlapNumber: number = NaN;						// Subroutine ID of the other subroutine, if any
-	public next_block: BasicBlock | null = null;  // Next block pointer
-	public br_block: BasicBlock | null = null;		// Branch block pointer
-	public exit_block: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
+	public nextBlock: BasicBlock | null = null;  // Next block pointer
+	public brBlock: BasicBlock | null = null;		// Branch block pointer
+	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
 	public flags: number = 0;											// Flags - see BBFLAG structure definition
 	public reguse: Array<number>;									// Register use array. 0 for not used, -1 for last access is write, 1 for last access is read
 	public savedReg: Array<boolean>; 							// Register save array. true for callee-saved, only valid for entry blocks
 	public restoredReg: Array<boolean>; 					// Register restore array. true for callee-saved, only valid for entry and exit blocks
-	public cc: number = 0; 												// CC, see CC definition in instruction.ts. True means the CC is possible to appear in the condition code
-	public initial_cc: number = CC.nzp; 					// Initial CC, True means the CC is possible to appear in the condition code
+	public cc: number = 0; 												// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
+	public initialCC: number = CC.nzp; 					// Initial CC, 1 means the CC is possible to appear in the condition code
 
 	constructor() {
 		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -34,7 +34,7 @@ export class BasicBlock {
 	// Push an instruction into the basic block
 	public pushInstruction(instruction: Instruction) {
 		if (this.instructions.length == 0) {
-			this.subroutine_num = instruction.subroutine_num;
+			this.subroutineNum = instruction.subroutineNum;
 		}
 		this.instructions.push(instruction);
 	}
@@ -52,11 +52,11 @@ export class BasicBlock {
 		this.flags |= BBFLAG.hasCheckedDeadCode;
 
 		// Get reguse from next blocks
-		if (this.next_block) {
-			reguse1 = this.next_block.checkDeadCode();
+		if (this.nextBlock) {
+			reguse1 = this.nextBlock.checkDeadCode();
 		}
-		if (this.br_block) {
-			reguse2 = this.br_block.checkDeadCode();
+		if (this.brBlock) {
+			reguse2 = this.brBlock.checkDeadCode();
 		}
 
 		// Merge reguse
@@ -74,7 +74,7 @@ export class BasicBlock {
 		for (idx = this.instructions.length - 1; idx >= 0; idx--) {
 			instruction = this.instructions[idx];
 			if (!isNaN(instruction.dest) && this.reguse[instruction.dest] == -1) {
-				instruction.flags |= INSTFLAG.is_dead;
+				instruction.flags |= INSTFLAG.isDead;
 				continue;
 			}
 			if (!isNaN(instruction.dest)) {
@@ -100,17 +100,17 @@ export class BasicBlock {
 		}
 		this.flags |= BBFLAG.hasCheckedRestore;
 
-		if (this.next_block) {
-			this.next_block.checkRestoredReg(bb);
+		if (this.nextBlock) {
+			this.nextBlock.checkRestoredReg(bb);
 		}
-		if (this.br_block) {
-			this.br_block.checkRestoredReg(bb);
+		if (this.brBlock) {
+			this.brBlock.checkRestoredReg(bb);
 		}
 
 		// The last block (return block)
 		if (this.isRETBlock()) {
 			// Link block with entry block
-			bb.exit_block.push(this);
+			bb.exitBlock.push(this);
 			// Skip the last operation (should be a RET)
 			for (idx = this.instructions.length - 2; idx >= 0; idx--) {
 				instruction = this.instructions[idx];
@@ -126,20 +126,20 @@ export class BasicBlock {
 	}
 
 	// Check CC possibility in this block
-	public checkCC(pre_cc: number) {
+	public checkCC(preCC: number) {
 		let idx: number, i: number;
 		let instruction: Instruction;
 
 		// If CC didn't change, return immediately
-		if (this.initial_cc == pre_cc) {
+		if (this.initialCC == preCC) {
 			return;
 		}
 
 		// Merge cc
-		this.initial_cc |= pre_cc;
+		this.initialCC |= preCC;
 
 		// Iterate through instructions
-		this.cc = this.initial_cc;
+		this.cc = this.initialCC;
 		for (idx = 0; idx < this.instructions.length; idx++) {
 			instruction = this.instructions[idx];
 			// Reset CC possiblity
@@ -148,18 +148,18 @@ export class BasicBlock {
 			}
 			// Finds BR
 			if (instruction.optype == "BR") {
-				instruction.br_possibility = this.compareCC(this.cc, instruction);
+				instruction.brPossibility = this.compareCC(this.cc, instruction);
 				this.cc &= instruction.cc;
 			}
 		}
 
 		// Check for next blocks
-		if (this.next_block) {
+		if (this.nextBlock) {
 			// Next block
-			this.next_block.checkCC(~this.cc & CC.nzp);
-		} if (this.br_block) {
+			this.nextBlock.checkCC(~this.cc & CC.nzp);
+		} if (this.brBlock) {
 			// Branch target
-			this.br_block.checkCC(this.cc);
+			this.brBlock.checkCC(this.cc);
 		}
 	}
 

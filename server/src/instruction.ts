@@ -24,41 +24,41 @@ export enum CC {
 }
 
 export enum INSTFLAG {
-  is_incomplete = 0x1,
-  is_subroutine_start = 0x2,
-  is_found = 0x4,
-  is_dead = 0x8,
-  has_semicolon = 0x10
+  isIncomplete = 0x1,
+  isSubroutineStart = 0x2,
+  isFound = 0x4,
+  isDead = 0x8,
+  hasSemicolon = 0x10
 }
 
 export class Instruction {
   // Internal variables
-  public raw_string: string;                            // The original line content
+  public rawString: string;                            // The original line content
   public optype: string = "";                           // Operation type
-  public mem_addr: number = NaN;                        // Memory address
+  public memAddr: number = NaN;                        // Memory address
   public mem: string = "";                              // Targeting memory (label name)
   public line: number = NaN;                            // Line number
   public src: number = NaN;                             // Source reg1
   public src2: number = NaN;                            // Source reg2
   public dest: number = NaN;                            // Destination reg
-  public imm_val: number = NaN;                         // Immediate value/ PC offset
-  public imm_val_type: string = "";                     // Immediate value type: R, X, #, 0/1
+  public immVal: number = NaN;                         // Immediate value/ PC offset
+  public immValType: string = "";                     // Immediate value type: R, X, #, 0/1
   public cc: number = 0;                                // Only valid for BR instructions, cc[2, 1, 0] = n, z, p
   public flags: number = 0;                             // Flags, see INSTFLAG above
   // Subroutine
-  public subroutine_num: number = NaN;                  // Subroutine ID
-  public code_overlap: number = NaN;                    // Subroutine ID of the other code that overlaps
+  public subroutineNum: number = NaN;                  // Subroutine ID
+  public codeOverlap: number = NaN;                    // Subroutine ID of the other code that overlaps
   // Added for CFG
-  public next_instruction: Instruction | null = null;   // Pointer to next instruction
-  public br_target: Instruction | null = null;          // Pointer to BR target
-  public jsr_target: Instruction | null = null;         // Pointer to JSR target
-  public incoming_arcs: number = 0;                     // Number of incoming arcs
-  public in_block: BasicBlock | null = null;            // Basic block containing the instruction
-  public br_possibility: number = 0;                    // Possibility of branch. 0 for conditional, 1 for always, -1 for never
+  public nextInstruction: Instruction | null = null;   // Pointer to next instruction
+  public brTarget: Instruction | null = null;          // Pointer to BR target
+  public jsrTarget: Instruction | null = null;         // Pointer to JSR target
+  public incomingArcs: number = 0;                     // Number of incoming arcs
+  public inBlock: BasicBlock | null = null;            // Basic block containing the instruction
+  public brPossibility: number = 0;                    // Possibility of branch. 0 for conditional, 1 for always, -1 for never
 
   constructor(inst: string) {
     // Default values
-    this.raw_string = inst;
+    this.rawString = inst;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -81,16 +81,16 @@ export class Instruction {
           if (instlst[3][0] == 'R') {
             this.src2 = this.parseValue(instlst[3]);
           } else {
-            this.imm_val = this.parseValue(instlst[3]);
-            this.imm_val_type = instlst[3][0];
+            this.immVal = this.parseValue(instlst[3]);
+            this.immValType = instlst[3][0];
           }
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         if (isNaN(this.dest) || isNaN(this.src) ||
           (instlst[3][0] == 'R' && isNaN(this.src2)) ||
-          (instlst[3][0] != 'R' && isNaN(this.imm_val))) {
-            this.flags |= INSTFLAG.is_incomplete;
+          (instlst[3][0] != 'R' && isNaN(this.immVal))) {
+            this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -98,10 +98,10 @@ export class Instruction {
         if (instlst.length >= 2) {
           this.dest = this.parseValue(instlst[1]);
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         if (isNaN(this.dest)) {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -109,7 +109,7 @@ export class Instruction {
         if (instlst.length >= 2) {
           this.mem = instlst[1];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -117,10 +117,10 @@ export class Instruction {
         if (instlst.length >= 2) {
           this.dest = this.parseValue(instlst[1]);
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         if (this.dest == NaN) {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -130,10 +130,10 @@ export class Instruction {
           this.dest = this.parseValue(instlst[1]);
           this.mem = instlst[2];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || is_lc3_register(this.mem)) {
-          this.flags |= INSTFLAG.is_incomplete;
+        if (this.dest == NaN || isLc3Reg(this.mem)) {
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -141,13 +141,13 @@ export class Instruction {
         if (instlst.length >= 4) {
           this.dest = this.parseValue(instlst[1]);
           this.src = this.parseValue(instlst[2]);
-          this.imm_val = this.parseValue(instlst[3]);
-          this.imm_val_type = instlst[3][0];
+          this.immVal = this.parseValue(instlst[3]);
+          this.immValType = instlst[3][0];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || isNaN(this.src) || isNaN(this.imm_val)) {
-          this.flags |= INSTFLAG.is_incomplete;
+        if (this.dest == NaN || isNaN(this.src) || isNaN(this.immVal)) {
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -156,10 +156,10 @@ export class Instruction {
           this.dest = this.parseValue(instlst[1]);
           this.mem = instlst[2];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || is_lc3_register(this.mem)) {
-          this.flags |= INSTFLAG.is_incomplete;
+        if (this.dest == NaN || isLc3Reg(this.mem)) {
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -168,10 +168,10 @@ export class Instruction {
           this.dest = this.parseValue(instlst[1]);
           this.src = this.parseValue(instlst[2]);
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         if (this.dest == NaN || isNaN(this.src)) {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -186,10 +186,10 @@ export class Instruction {
           this.src = this.parseValue(instlst[1]);
           this.mem = instlst[2];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (isNaN(this.src) || is_lc3_register(this.mem)) {
-          this.flags |= INSTFLAG.is_incomplete;
+        if (isNaN(this.src) || isLc3Reg(this.mem)) {
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -197,70 +197,70 @@ export class Instruction {
         if (instlst.length >= 4) {
           this.src = this.parseValue(instlst[1]);
           this.src2 = this.parseValue(instlst[2]);
-          this.imm_val = this.parseValue(instlst[3]);
-          this.imm_val_type = instlst[3][0];
+          this.immVal = this.parseValue(instlst[3]);
+          this.immValType = instlst[3][0];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (isNaN(this.src) || isNaN(this.src2) || isNaN(this.imm_val)) {
-          this.flags |= INSTFLAG.is_incomplete;
+        if (isNaN(this.src) || isNaN(this.src2) || isNaN(this.immVal)) {
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
       case "TRAP":
         if (instlst.length >= 2) {
-          this.imm_val = this.parseValue(instlst[1]);
-          this.imm_val_type = instlst[1][0];
+          this.immVal = this.parseValue(instlst[1]);
+          this.immValType = instlst[1][0];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.imm_val < 0x20 || this.imm_val > 0x25) {
-          this.imm_val = 0;
+        if (this.immVal < 0x20 || this.immVal > 0x25) {
+          this.immVal = 0;
         }
         break;
 
       // Frequently used TRAP vectors
       case "GETC":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.GETC;
+        this.immVal = TRAPVEC.GETC;
         this.dest = 0;
         break;
 
       case "IN":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.IN;
+        this.immVal = TRAPVEC.IN;
         this.dest = 0;
         break;
 
       case "OUT":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.OUT;
+        this.immVal = TRAPVEC.OUT;
         this.src = 0;
         break;
 
       case "PUTS":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.PUTS;
+        this.immVal = TRAPVEC.PUTS;
         this.src = 0;
         break;
 
       case "PUTSP":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.PUTSP;
+        this.immVal = TRAPVEC.PUTSP;
         this.src = 0;
         break;
 
       case "HALT":
         this.optype = "TRAP";
-        this.imm_val = TRAPVEC.HALT;
+        this.immVal = TRAPVEC.HALT;
         break;
 
       // Directives
       case ".ORIG":
         if (instlst.length >= 2) {
-          this.mem_addr = this.parseValue(instlst[1]);
+          this.memAddr = this.parseValue(instlst[1]);
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -269,23 +269,23 @@ export class Instruction {
 
       case ".FILL":
         if (instlst.length >= 2) {
-          if (is_lc3_number(instlst[1])) {
-            this.imm_val = this.parseValue(instlst[1]);
-            this.imm_val_type = instlst[1][0];
+          if (isLc3Num(instlst[1])) {
+            this.immVal = this.parseValue(instlst[1]);
+            this.immValType = instlst[1][0];
           } else {
             this.mem = instlst[1];
           }
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
       case ".BLKW":
         if (instlst.length >= 2) {
-          this.imm_val = this.parseValue(instlst[1]);
-          this.imm_val_type = instlst[1][0];
+          this.immVal = this.parseValue(instlst[1]);
+          this.immValType = instlst[1][0];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -293,7 +293,7 @@ export class Instruction {
         if (instlst.length >= 2) {
           this.mem = inst.slice(".STRINGZ".length).trim();
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -312,7 +312,7 @@ export class Instruction {
           this.optype = "BR";
           this.mem = instlst[1];
         } else {
-          this.flags |= INSTFLAG.is_incomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -329,7 +329,7 @@ export class Instruction {
       for (i = 0; i < this.mem.length; i++) {
         if (this.mem[i] == ';') {
           this.mem = this.mem.slice(0, i);
-          this.flags |= INSTFLAG.has_semicolon;
+          this.flags |= INSTFLAG.hasSemicolon;
         }
       }
     }
@@ -372,7 +372,7 @@ export class Instruction {
       case "JSR":
         return true;
       default:
-        if (this.next_instruction && this.next_instruction.isData()) {
+        if (this.nextInstruction && this.nextInstruction.isData()) {
           return true;
         } else {
           return false;
@@ -420,7 +420,7 @@ export class Instruction {
         break;
       default:
         // Binary
-        if (is_lc3_number(val)) {
+        if (isLc3Num(val)) {
           ret = parseInt(val, 2);
         } else {
           ret = NaN;
@@ -464,14 +464,14 @@ export class Instruction {
 }
 
 export class Label {
-  public mem_addr: number;                        // Memory address
+  public memAddr: number;                        // Memory address
   public name: string;                            // Name of label
   public line: number;                            // Line number
   public instruction: Instruction | null = null;  // Instruction at the same memory address
   public flags: number;                           // Flags inherited from Instruction
 
   constructor(instruction: Instruction) {
-    this.mem_addr = instruction.mem_addr;
+    this.memAddr = instruction.memAddr;
     this.name = instruction.mem;
     this.line = instruction.line;
     this.flags = instruction.flags;
@@ -479,7 +479,7 @@ export class Label {
 }
 
 // Returns true if the input string is a lc3 number: x1234, 0010, #123
-export function is_lc3_number(str: string): boolean {
+export function isLc3Num(str: string): boolean {
   const regx = /^x[0-9a-f]+$/i;
   const regb = /^[0-1]+$/;
   const regd = /^#[0-9]+$/;
@@ -487,16 +487,16 @@ export function is_lc3_number(str: string): boolean {
 }
 
 // Returns true if the input string is a lc3 register: R[0-7]
-export function is_lc3_register(str: string): boolean {
+export function isLc3Reg(str: string): boolean {
   const reg = /^r[0-7]$/i;
   return str.match(reg) != null;
 }
 
 // Returns the trap vector
-export function get_trap_function(instruction: Instruction): TRAPVEC {
+export function getTrapFunction(instruction: Instruction): TRAPVEC {
   if (instruction.optype != "TRAP") {
     return TRAPVEC.INVALID;
   } else {
-    return instruction.imm_val;
+    return instruction.immVal;
   }
 }

@@ -17,8 +17,8 @@ import {
 	TRAPVEC,
 	Instruction,
 	Label,
-	is_lc3_number,
-	is_lc3_register,
+	isLc3Num,
+	isLc3Reg,
 	INSTFLAG,
 	CC,
 } from './instruction'
@@ -36,7 +36,6 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 	const code = new Code(diagnosticInfo.textDocument.getText());
 	let idx: number;
 	let instruction: Instruction;
-	let label_id: number;
 
 	/** Global checking */
 	// Check for labels
@@ -56,7 +55,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 	for (idx = 0; idx < code.basicBlocks.length; idx++) {
 		// Check for code overlap between subroutines and/or main code
 		checkCodeOverlapBB(code.basicBlocks[idx], diagnosticInfo, code);
-		if (code.basicBlocks[idx].subroutine_num != code.start_addr) {
+		if (code.basicBlocks[idx].subroutineNum != code.startAddr) {
 			// Check for caller/callee saved registers
 			checkCalleeSavedRegs(code.basicBlocks[idx], diagnosticInfo, code);
 		}
@@ -67,19 +66,19 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 		instruction = code.instructions[idx];
 
 		// Skip the instruction if it is not found
-		if (!(instruction.flags & INSTFLAG.is_found)) {
+		if (!(instruction.flags & INSTFLAG.isFound)) {
 			continue;
 		}
 
 		// Check for incomplete/illegal instructions
-		if (diagnosticInfo.settings.showIncompleteInstructions && (instruction.flags & INSTFLAG.is_incomplete)) {
+		if (diagnosticInfo.settings.showIncompleteInstructions && (instruction.flags & INSTFLAG.isIncomplete)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line,
-				instruction.raw_string + " is incomplete/illegal");
+				instruction.rawString + " is incomplete/illegal");
 			continue;
 		}
 
 		// Check for dead code
-		if ((instruction.flags & INSTFLAG.is_dead)) {
+		if ((instruction.flags & INSTFLAG.isDead)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Dead code.", instruction.line,
 				"Overwriting the value without using the content in R" + instruction.dest + ".");
 		}
@@ -87,29 +86,29 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
 			case "ADD":
-				if (instruction.imm_val >= 32 || (instruction.imm_val >= 16 && instruction.imm_val_type == '#')) {
+				if (instruction.immVal >= 32 || (instruction.immVal >= 16 && instruction.immValType == '#')) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "AND":
-				if (instruction.imm_val >= 32) {
+				if (instruction.immVal >= 32) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "BR":
 				if (instruction.mem) {
 					checkBRpossibility(diagnosticInfo, instruction, code);
-					label_id = checkPCoffset(diagnosticInfo, instruction, code, 9);
-					if (label_id >= 0) {
-						checkJumpToData(diagnosticInfo, instruction, code, label_id);
+					let labelID = checkPCoffset(diagnosticInfo, instruction, code, 9);
+					if (labelID >= 0) {
+						checkJumpToData(diagnosticInfo, instruction, code, labelID);
 					}
 				}
 				break;
 			case "JSR":
 				if (instruction.mem) {
-					label_id = checkPCoffset(diagnosticInfo, instruction, code, 11);
-					if (label_id >= 0) {
-						checkJumpToData(diagnosticInfo, instruction, code, label_id);
+					let labelID = checkPCoffset(diagnosticInfo, instruction, code, 11);
+					if (labelID >= 0) {
+						checkJumpToData(diagnosticInfo, instruction, code, labelID);
 					}
 				}
 				break;
@@ -128,17 +127,17 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 				break;
 			case "LDR":
 			case "STR":
-				if (instruction.imm_val >= 64) {
+				if (instruction.immVal >= 64) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "TRAP":
-				switch (instruction.imm_val) {
+				switch (instruction.immVal) {
 					case TRAPVEC.INVALID:
 						generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Unknown TRAP vector.", instruction.line, "");
 						break;
 					case TRAPVEC.HALT:
-						if (instruction.subroutine_num != code.start_addr) {
+						if (instruction.subroutineNum != code.startAddr) {
 							generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "HALT inside subroutine.", instruction.line,
 								"You should not let the machine HALT inside a subroutine.");
 						}
@@ -146,7 +145,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 				}
 				break;
 			case "RET":
-				if (instruction.subroutine_num == code.start_addr) {
+				if (instruction.subroutineNum == code.startAddr) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "RET outside of subroutine.", instruction.line,
 						"You are executing RET outside of a subroutine. Use 'JMP R7' if you really meant to do that.");
 				}
@@ -155,7 +154,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 			case ".STRINGZ":
 				break;
 			case ".BLKW":
-				if (!(instruction.flags & INSTFLAG.is_incomplete) && instruction.imm_val_type != '#' && instruction.imm_val_type != '0' && instruction.imm_val_type != 'X' && instruction.imm_val != 1) {
+				if (!(instruction.flags & INSTFLAG.isIncomplete) && instruction.immValType != '#' && instruction.immValType != '0' && instruction.immValType != 'X' && instruction.immVal != 1) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Decimal number without #", instruction.line,
 						".BLKW directives view the number as decimal by default. If you meant to write a binary number, add a leading 0; if you \
 						meant to write a decimal number, add a leading #.");
@@ -172,10 +171,10 @@ function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruc
 	if (instruction.cc == CC.nzp) {
 		return;
 	}
-	if (instruction.br_possibility == 1) {
+	if (instruction.brPossibility == 1) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Branch always taken.", instruction.line,
 			"The condition of this branch is always true, use BR/BRnzp for better readability.");
-	} else if (instruction.br_possibility == -1) {
+	} else if (instruction.brPossibility == -1) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Redundant condition.", instruction.line,
 			"Some condition(s) of this branch is always false, remove them for better readability.");
 	}
@@ -185,7 +184,7 @@ function findLabelByAddress(code: Code, address: number): Label {
 	let i: number;
 	let label = new Label(new Instruction(""));
 	for (i = 0; i < code.labels.length; i++) {
-		if (code.labels[i].mem_addr == address) {
+		if (code.labels[i].memAddr == address) {
 			label = code.labels[i];
 		}
 	}
@@ -199,20 +198,20 @@ function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
 	let instruction: Instruction;
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
-		if (isNaN(instruction.mem_addr)) {
+		if (isNaN(instruction.memAddr)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Code before .ORIG directive.", instruction.line,
 				"Code before .ORIG is not allowed. Are you missing the .ORIG directive?");
-		} else if (instruction.mem_addr >= code.end_addr) {
+		} else if (instruction.memAddr >= code.endAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Code after .END directive.", instruction.line,
 				"Code after .END will be ignored.");
 		}
 	}
 	for (idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
-		if (isNaN(label.mem_addr)) {
+		if (isNaN(label.memAddr)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Code before .ORIG directive.", label.line,
 				"Label before .ORIG is not allowed.");
-		} else if (label.mem_addr >= code.end_addr) {
+		} else if (label.memAddr >= code.endAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Code after .END directive.", label.line,
 				"Label after .END will be ignored.");
 		}
@@ -227,17 +226,17 @@ function checkLabels(diagnosticInfo: DiagnosticInfo, code: Code) {
 	for (idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		// Check for unusable label name
-		if (is_lc3_number(label.name) || is_lc3_register(label.name)) {
+		if (isLc3Num(label.name) || isLc3Reg(label.name)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number.", label.line,
 				"This label name will be recognized as a number or register name by the assembler, it will not be usable in any other instructions.");
 		}
 		// Check for multiple labels at the same line
-		if (diagnosticInfo.settings.showMultipleLabels && idx + 1 < code.labels.length && label.mem_addr == code.labels[idx + 1].mem_addr) {
+		if (diagnosticInfo.settings.showMultipleLabels && idx + 1 < code.labels.length && label.memAddr == code.labels[idx + 1].memAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Multiple label at the same memory location.", label.line,
 				"Label " + label.name + " and " + code.labels[idx + 1].name + " are at the same memory location.");
 		}
 		// Check for ; in labels
-		if (label.flags & INSTFLAG.has_semicolon) {
+		if (label.flags & INSTFLAG.hasSemicolon) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Label name contains semicolon.", label.line,
 				"Semicolon(;) is not recognized as part of the label name. If you use the label name with trailing semicolon in other instructions, \
 		then the assembler will not be able to find it.");
@@ -261,24 +260,24 @@ function checkCodeOverlapBB(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code
 	}
 	bb.flags |= BBFLAG.hasExplored;
 	if (!isNaN(bb.overlapNumber)) {
-		if (bb.subroutine_num == code.start_addr) {
+		if (bb.subroutineNum == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
 				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and main code.");
-		} else if (bb.overlapNumber == code.start_addr) {
+		} else if (bb.overlapNumber == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
-				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutine_num).name + " and main code.");
+				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutineNum).name + " and main code.");
 		} else {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", bb.instructions[0].line,
 				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and subroutine " +
-				findLabelByAddress(code, bb.instructions[0].mem_addr).name + ".");
+				findLabelByAddress(code, bb.instructions[0].memAddr).name + ".");
 		}
 	}
 
-	if (bb.next_block) {
-		checkCodeOverlapBB(bb.next_block, diagnosticInfo, code);
+	if (bb.nextBlock) {
+		checkCodeOverlapBB(bb.nextBlock, diagnosticInfo, code);
 	}
-	if (bb.br_block) {
-		checkCodeOverlapBB(bb.br_block, diagnosticInfo, code);
+	if (bb.brBlock) {
+		checkCodeOverlapBB(bb.brBlock, diagnosticInfo, code);
 	}
 }
 
@@ -307,11 +306,11 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		}
 	}
 
-	for (idx = 0; idx < bb.exit_block.length; idx++) {
-		andWithRestore(bb.restoredReg, bb.savedReg, bb.exit_block[idx].restoredReg);
+	for (idx = 0; idx < bb.exitBlock.length; idx++) {
+		andWithRestore(bb.restoredReg, bb.savedReg, bb.exitBlock[idx].restoredReg);
 	}
 
-	label = findLabelByAddress(code, bb.subroutine_num);
+	label = findLabelByAddress(code, bb.subroutineNum);
 	// Generate string
 	str = "";
 	// R7 is always caller-saved
@@ -328,8 +327,8 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		label.line, "Callee-saved Registers: " + str);
 
 	// Check for each exit block
-	for (idx = 0; idx < bb.exit_block.length; idx++) {
-		exit = bb.exit_block[idx];
+	for (idx = 0; idx < bb.exitBlock.length; idx++) {
+		exit = bb.exitBlock[idx];
 		ret = exit.instructions[exit.instructions.length - 1];
 		// Mismatch in registers
 		str = "";
@@ -354,11 +353,11 @@ function andWithRestore(new_restore: Array<boolean>, save: Array<boolean>, resto
 	}
 }
 
-function findBlockBySubroutine(subroutine_num: number, code: Code): BasicBlock {
+function findBlockBySubroutine(subroutineNum: number, code: Code): BasicBlock {
 	let idx: number;
 	let bb: BasicBlock = new BasicBlock();
 	for (idx = 0; idx < code.basicBlocks.length; idx++) {
-		if (code.basicBlocks[idx].subroutine_num == subroutine_num) {
+		if (code.basicBlocks[idx].subroutineNum == subroutineNum) {
 			bb = code.basicBlocks[idx];
 		}
 	}
@@ -373,7 +372,7 @@ function checkUnreachableInstructions(diagnosticInfo: DiagnosticInfo, code: Code
 	// Check for unreachable code
 	for (i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
-		if (!instruction.isData() && !(instruction.flags & INSTFLAG.is_found)) {
+		if (!instruction.isData() && !(instruction.flags & INSTFLAG.isFound)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}
@@ -385,7 +384,7 @@ function checkUncalledSubroutines(diagnosticInfo: DiagnosticInfo, code: Code) {
 	let label: Label;
 	for (i = 0; i < code.labels.length; i++) {
 		label = code.labels[i];
-		if (label.instruction && !label.instruction.isData() && !(label.instruction.flags & INSTFLAG.is_found)) {
+		if (label.instruction && !label.instruction.isData() && !(label.instruction.flags & INSTFLAG.isFound)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], MESSAGE_POSSIBLE_SUBROUTINE, label.line,
 				"The code after this label is unreachable. Is this label a subroutine?");
 		}
@@ -398,7 +397,7 @@ function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction,
 	let i;
 	let max = 1 << offsetnumber;
 	// Label name is number
-	if (is_lc3_number(instruction.mem)) {
+	if (isLc3Num(instruction.mem)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Hardcoded PCoffset.", instruction.line,
 			"Hardcoding the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
 		return -2;
@@ -406,9 +405,9 @@ function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction,
 		// Check if offset is within range
 		for (i = 0; i < code.labels.length; i++) {
 			if (code.labels[i].name == instruction.mem) {
-				if (instruction.mem_addr - code.labels[i].mem_addr - 1 < -max || instruction.mem_addr - code.labels[i].mem_addr > max - 1) {
+				if (instruction.memAddr - code.labels[i].memAddr - 1 < -max || instruction.memAddr - code.labels[i].memAddr > max - 1) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "PCoffset is too large.", instruction.line,
-						"The PCoffset of this instruction(" + (code.labels[i].mem_addr - instruction.mem_addr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
+						"The PCoffset of this instruction(" + (code.labels[i].memAddr - instruction.memAddr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
 				}
 				break;
 			}
@@ -441,15 +440,15 @@ function checkJumpToData(diagnosticInfo: DiagnosticInfo, instruction: Instructio
 function checkRunningIntoData(diagnosticInfo: DiagnosticInfo, code: Code) {
 	let idx: number, i: number;
 	let instruction: Instruction;
-	let next_instruction: Instruction | null;
+	let nextInstruction: Instruction | null;
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 		// Check the first instruction
 		if (idx == 0 && instruction.isData()) {
 			// If there is a valid instruction, report error		
 			for (i = 1; i < code.instructions.length; i++) {
-				next_instruction = code.instructions[i];
-				if (!next_instruction.isData()) {
+				nextInstruction = code.instructions[i];
+				if (!nextInstruction.isData()) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Running into data.", instruction.line,
 						"The program runs into data at the beginning.");
 					break;
@@ -460,10 +459,10 @@ function checkRunningIntoData(diagnosticInfo: DiagnosticInfo, code: Code) {
 				return;
 			}
 		}
-		next_instruction = instruction.next_instruction;
-		if (next_instruction && next_instruction.isData()) {
-			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Running into data.", next_instruction.line,
-				"The program may run into data after executing the instruction \"" + instruction.raw_string + "\" at line " + (instruction.line + 1) + ".");
+		nextInstruction = instruction.nextInstruction;
+		if (nextInstruction && nextInstruction.isData()) {
+			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Running into data.", nextInstruction.line,
+				"The program may run into data after executing the instruction \"" + instruction.rawString + "\" at line " + (instruction.line + 1) + ".");
 
 		}
 	}
