@@ -1,13 +1,15 @@
 import Stack from 'ts-data.stack/stack';
 
 import {
-  BasicBlock
+  BasicBlock,
 } from "./basicBlock";
 
 import {
   TRAPVEC,
   Instruction,
-  Label
+  Label,
+  CC,
+  INSTFLAG,
 } from './instruction'
 
 export class Code {
@@ -198,7 +200,7 @@ export class Code {
       } else if (instruction.optype == "BR") {
         // BR
         instruction.br_target = this.get_target(idx);
-        if (instruction.br_target && instruction.n && instruction.z && instruction.p) {
+        if (instruction.br_target && instruction.cc == CC.nzp) {
           instruction.next_instruction = null;
         }
       } else if (instruction.optype == "RET" ||
@@ -234,7 +236,7 @@ export class Code {
       instruction = this.instructions[idx];
       if (instruction.jsr_target) {
         target = instruction.jsr_target;
-        target.is_subroutine_start = true;
+        target.flags |= INSTFLAG.is_subroutine_start;
         target.subroutine_num = target.mem_addr;
       }
     }
@@ -245,7 +247,7 @@ export class Code {
       if (line.match("@SUBROUTINE")) {
         label = this.findLabelByLine(idx + 1);
         if (label.instruction) {
-          label.instruction.is_subroutine_start = true;
+          label.instruction.flags |= INSTFLAG.is_subroutine_start;
           label.instruction.subroutine_num = label.instruction.mem_addr;
         }
       }
@@ -278,7 +280,7 @@ export class Code {
     // Analyze subroutines
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
-      if (instruction.is_subroutine_start) {
+      if (instruction.flags & INSTFLAG.is_subroutine_start) {
         this.iterate_code(instruction, instruction.subroutine_num);
       }
     }
@@ -289,11 +291,11 @@ export class Code {
     let cur_instruction: Instruction;
     let next_instrcution: Instruction | null;
 
-    if (initial_instruction.is_subroutine_start &&
+    if (initial_instruction.flags & INSTFLAG.is_subroutine_start &&
       initial_instruction.subroutine_num != subroutine_num) {
       initial_instruction.code_overlap = subroutine_num;
     } else {
-      initial_instruction.is_found = true;
+      initial_instruction.flags |= INSTFLAG.is_found;
       initial_instruction.subroutine_num = subroutine_num;
       this.stack.push(initial_instruction);
     }
@@ -316,10 +318,10 @@ export class Code {
 
   // Do the checking and push one instruction onto stack
   private pushToStack(instruction: Instruction, subroutine_num: number) {
-    if (instruction.is_subroutine_start) {
+    if (instruction.flags & INSTFLAG.is_subroutine_start) {
       instruction.code_overlap = subroutine_num;
-    } else if (!instruction.is_found) {
-      instruction.is_found = true;
+    } else if (!(instruction.flags & INSTFLAG.is_found)) {
+      instruction.flags |= INSTFLAG.is_found;
       instruction.subroutine_num = subroutine_num;
       this.stack.push(instruction);
     } else if (instruction.subroutine_num != subroutine_num) {
@@ -351,7 +353,7 @@ export class Code {
     // Explore subroutines
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
-      if (instruction.is_subroutine_start) {
+      if (instruction.flags & INSTFLAG.is_subroutine_start) {
         bb = this.buildOneBlock(instruction, instruction.subroutine_num);
         this.basicBlocks.push(bb);
       }

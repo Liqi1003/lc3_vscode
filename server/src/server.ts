@@ -152,13 +152,25 @@ documents.onDidChangeContent(change => {
   updateCompletionItems(change.document);
 });
 
+// Simplify the interface
+export interface DiagnosticInfo {
+  textDocument: TextDocument;
+  diagnostics: Diagnostic[];
+  settings: ExtensionSettings;
+}
+
 export async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   // Get the settings of the document
   const settings = await getDocumentSettings(textDocument.uri);
+  const diagnostics: Diagnostic[] = [];
+  const diagnosticInfo: DiagnosticInfo = {
+    textDocument: textDocument,
+    diagnostics: diagnostics,
+    settings: settings
+  };
 
   // Generate diagnostics
-  let diagnostics: Diagnostic[];
-  diagnostics = generateDiagnostics(textDocument, settings);
+  generateDiagnostics(diagnosticInfo);
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }

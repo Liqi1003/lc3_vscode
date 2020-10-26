@@ -24,25 +24,26 @@ export enum OPNUM {
 	OUT,
 	PUTS,
 	PUTSP,
-	HALT
+	HALT,
 }
 
 import {
 	CompletionItem,
-	CompletionItemKind
+	CompletionItemKind,
 } from 'vscode-languageserver';
 
 import {
-	TextDocument
+	TextDocument,
 } from 'vscode-languageserver-textdocument';
 
 import {
-	Code
+	Code,
 } from './code';
 
 import {
+	INSTFLAG,
 	Instruction,
-	Label
+	Label,
 } from './instruction'
 
 const defaultCompletionItems: CompletionItem[] = [
@@ -200,7 +201,7 @@ export function updateCompletionItems(textDocument: TextDocument) {
 	// Push labels in instructions
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
-		if(!instruction.incomplete && instruction.isMemType()) {
+		if(!(instruction.flags & INSTFLAG.is_incomplete) && instruction.isMemType()) {
 			item = { label: instruction.mem, kind: CompletionItemKind.Text, data: instruction.line };
 			for (i = 0; i < completionItems.length; i++) {
 				if (completionItems[i].label == instruction.mem) {
