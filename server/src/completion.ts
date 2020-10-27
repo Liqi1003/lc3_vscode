@@ -178,9 +178,8 @@ const defaultCompletionItems: CompletionItem[] = [
 export let completionItems: CompletionItem[];
 
 // Update completion item list according to the label names
-export function updateCompletionItems(textDocument: TextDocument) {
+export function updateCompletionItems(code: Code) {
 	completionItems = [...defaultCompletionItems];
-	const code = new Code(textDocument.getText());
 	let idx: number, i: number;
 	let label: Label;
 	let instruction: Instruction;
@@ -201,7 +200,7 @@ export function updateCompletionItems(textDocument: TextDocument) {
 	// Push labels in instructions
 	for (idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
-		if(!(instruction.flags & INSTFLAG.isIncomplete) && instruction.isMemType()) {
+		if (!(instruction.flags & INSTFLAG.isIncomplete) && instruction.isMemType()) {
 			item = { label: instruction.mem, kind: CompletionItemKind.Text, data: instruction.line };
 			for (i = 0; i < completionItems.length; i++) {
 				if (completionItems[i].label == instruction.mem) {

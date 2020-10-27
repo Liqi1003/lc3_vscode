@@ -31,9 +31,7 @@ import {
 // For code action
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
-export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
-	// Parse the code
-	const code = new Code(diagnosticInfo.textDocument.getText());
+export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) {
 	let idx: number;
 	let instruction: Instruction;
 
@@ -80,7 +78,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 		// Check for dead code
 		if ((instruction.flags & INSTFLAG.isDead)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Dead code.", instruction.line,
-				"Overwriting the value without using the content in R" + instruction.dest + ".");
+				"Overwriting the value in R" + instruction.dest + " without using it.");
 		}
 
 		// Checking each line of code based on operation type
@@ -168,15 +166,25 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo) {
 
 // Check for always BR and redundant conditions (Warning)
 function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruction, code: Code) {
-	if (instruction.cc == CC.nzp) {
-		return;
-	}
-	if (instruction.brPossibility == 1) {
+	if ((instruction.cc != CC.nzp) && (instruction.flags & INSTFLAG.isAlwaysBR)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Branch always taken.", instruction.line,
 			"The condition of this branch is always true, use BR/BRnzp for better readability.");
-	} else if (instruction.brPossibility == -1) {
+	} else if (instruction.flags & INSTFLAG.isNeverBR) {
+		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Branch never taken.", instruction.line,
+			"The condition of this branch is always false.");
+	} else if (instruction.flags & INSTFLAG.hasRedundantCC) {
+		let str: string = "";
+		if(instruction.redundantCC & CC.n){
+			str += "n";
+		}
+		if(instruction.redundantCC & CC.z){
+			str += "z";
+		}
+		if(instruction.redundantCC & CC.p){
+			str += "p";
+		}
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Redundant condition.", instruction.line,
-			"Some condition(s) of this branch is always false, remove them for better readability.");
+			"The condition " + str + " of this branch is always false, remove them for better readability.");
 	}
 }
 
@@ -259,6 +267,7 @@ function checkCodeOverlapBB(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code
 		return;
 	}
 	bb.flags |= BBFLAG.hasExplored;
+	
 	if (!isNaN(bb.overlapNumber)) {
 		if (bb.subroutineNum == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,

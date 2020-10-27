@@ -16,21 +16,32 @@ export class Code {
   public instructions: Instruction[] = [];                      // Instructions array
   public labels: Label[] = [];                                  // Labels array
   public basicBlocks: BasicBlock[] = [];                        // Basic blocks
-  public startAddr: number = NaN;                              // Start address marked by .ORIG
-  public endAddr: number = NaN;                                // End address marked by .END
+  public startAddr: number = NaN;                               // Start address marked by .ORIG
+  public endAddr: number = NaN;                                 // End address marked by .END
   private firstInstrIdx: number = NaN;                          // First instruction index after .ORIG
-  private lineNum: number = 0;                                 // Keeps track of current line number
-  private memAddr: number = NaN;                               // Keep track of current memory address
+  private lineNum: number = 0;                                  // Keeps track of current line number
+  private memAddr: number = NaN;                                // Keep track of current memory address
   private stack: Stack<Instruction> = new Stack<Instruction>(); // Stack used for building CFG
 
   constructor(text: string) {
+    let count: number = 0;
+    // First round
     this.buildInstructions(text);
     this.linkLabels();
     this.analyzeCFG();
     this.markSubroutines(text);
     this.analyzeCode();
     this.buildBlocks();
-    this.analyzeBlocks();
+    // Forward-backword analyzation
+    // To prevent falling into infinite loop, added a count
+    while ((count < 10) && this.analyzeBlocks()) {
+      this.resetStatus();
+      this.analyzeCFG();
+      this.markSubroutines(text);
+      this.analyzeCode();
+      count += 1;
+    }
+    console.log(this);
   }
 
   private buildInstructions(text: string) {
@@ -97,7 +108,6 @@ export class Code {
         }
       }
     }
-    console.log(this);
   }
 
   // Push an instruction according to its type (push/not push/push to label)
@@ -176,7 +186,7 @@ export class Code {
 
   // Build the CFG of the given code
   private analyzeCFG() {
-    let idx: number, i: number;
+    let idx: number;
     let instruction: Instruction;
     let next: Instruction | null;
 
@@ -200,7 +210,10 @@ export class Code {
       } else if (instruction.optype == "BR") {
         // BR
         instruction.brTarget = this.getTarget(idx);
-        if (instruction.brTarget && instruction.cc == CC.nzp) {
+        if (instruction.flags & INSTFLAG.isNeverBR) {
+          instruction.brTarget = null;
+        }
+        if (instruction.flags & INSTFLAG.isAlwaysBR) {
           instruction.nextInstruction = null;
         }
       } else if (instruction.optype == "RET" ||
@@ -409,15 +422,38 @@ export class Code {
     return bb;
   }
 
-  private analyzeBlocks() {
+  // Analyze blocks, including dead code, CC and save-restore checking
+  // Returns 0 if there are no change to the CFG; non-zero otherwise
+  private analyzeBlocks(): number {
     let idx: number;
+    let ret: number = 0;
+
     for (idx = 0; idx < this.basicBlocks.length; idx++) {
       this.basicBlocks[idx].checkDeadCode();
-      // this.basicBlocks[idx].checkCC([false, false, false]);
+      ret |= this.basicBlocks[idx].checkCC(CC.nzp);
       // Only check for save-restore registers in subroutines
       if (idx > 0) {
         this.basicBlocks[idx].checkRestoredReg(this.basicBlocks[idx]);
       }
     }
+    return ret;
   }
+
+  // Reset relevant flags in instructions and basic blocks
+  private resetStatus() {
+    let idx: number;
+    let instruction: Instruction;
+    let bb: BasicBlock;
+    // Clear flags in instructions
+    for (idx = 0; idx < this.instructions.length; idx++) {
+      instruction = this.instructions[idx];
+      instruction.flags &= ~(INSTFLAG.isFound | INSTFLAG.isDead);
+    }
+    // Reset blocks
+    for (idx = 0; idx < this.basicBlocks.length; idx++) {
+      bb = this.basicBlocks[idx];
+      bb.resetBlock();
+    }
+  }
+
 }

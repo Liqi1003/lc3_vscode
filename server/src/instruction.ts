@@ -13,7 +13,7 @@ export enum TRAPVEC {
 }
 
 export enum CC {
-  undefined = 0x0,  // Invalid CC, usually on program start
+  none = 0x0,  // Invalid CC, usually on program start
   p = 0x1,
   z = 0x2,
   n = 0x4,
@@ -24,27 +24,31 @@ export enum CC {
 }
 
 export enum INSTFLAG {
+  none = 0x0,
   isIncomplete = 0x1,
   isSubroutineStart = 0x2,
   isFound = 0x4,
   isDead = 0x8,
-  hasSemicolon = 0x10
+  hasSemicolon = 0x10,
+  isAlwaysBR = 0x20,
+  isNeverBR = 0x40,
+  hasRedundantCC = 0x80,
 }
 
 export class Instruction {
   // Internal variables
   public rawString: string;                            // The original line content
-  public optype: string = "";                           // Operation type
+  public optype: string = "";                          // Operation type
   public memAddr: number = NaN;                        // Memory address
-  public mem: string = "";                              // Targeting memory (label name)
-  public line: number = NaN;                            // Line number
-  public src: number = NaN;                             // Source reg1
-  public src2: number = NaN;                            // Source reg2
-  public dest: number = NaN;                            // Destination reg
+  public mem: string = "";                             // Targeting memory (label name)
+  public line: number = NaN;                           // Line number
+  public src: number = NaN;                            // Source reg1
+  public src2: number = NaN;                           // Source reg2
+  public dest: number = NaN;                           // Destination reg
   public immVal: number = NaN;                         // Immediate value/ PC offset
-  public immValType: string = "";                     // Immediate value type: R, X, #, 0/1
-  public cc: number = 0;                                // Only valid for BR instructions, cc[2, 1, 0] = n, z, p
-  public flags: number = 0;                             // Flags, see INSTFLAG above
+  public immValType: string = "";                      // Immediate value type: R, X, #, 0/1
+  public cc: CC = CC.none;                             // Only valid for BR instructions, cc[2, 1, 0] = n, z, p
+  public flags: number = INSTFLAG.none;                // Flags, see INSTFLAG above
   // Subroutine
   public subroutineNum: number = NaN;                  // Subroutine ID
   public codeOverlap: number = NaN;                    // Subroutine ID of the other code that overlaps
@@ -54,7 +58,7 @@ export class Instruction {
   public jsrTarget: Instruction | null = null;         // Pointer to JSR target
   public incomingArcs: number = 0;                     // Number of incoming arcs
   public inBlock: BasicBlock | null = null;            // Basic block containing the instruction
-  public brPossibility: number = 0;                    // Possibility of branch. 0 for conditional, 1 for always, -1 for never
+  public redundantCC: CC = CC.none;                    // Only valid for BR instructions, indicate which CC is redundant
 
   constructor(inst: string) {
     // Default values
@@ -90,7 +94,7 @@ export class Instruction {
         if (isNaN(this.dest) || isNaN(this.src) ||
           (instlst[3][0] == 'R' && isNaN(this.src2)) ||
           (instlst[3][0] != 'R' && isNaN(this.immVal))) {
-            this.flags |= INSTFLAG.isIncomplete;
+          this.flags |= INSTFLAG.isIncomplete;
         }
         break;
 
@@ -380,8 +384,8 @@ export class Instruction {
     }
   }
 
-  public setCC(): boolean{
-    switch(this.optype){
+  public setCC(): boolean {
+    switch (this.optype) {
       case "ADD":
       case "AND":
       case "LD":
@@ -438,6 +442,7 @@ export class Instruction {
       case "":
       case "NZP":
         this.cc = CC.nzp;
+        this.flags |= INSTFLAG.isAlwaysBR;
         break;
       case "N":
         this.cc = CC.n;

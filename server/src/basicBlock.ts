@@ -1,8 +1,11 @@
 export enum BBFLAG {
+	none = 0x0,
 	hasExplored = 0x1,
 	hasCheckedDeadCode = 0x2,
 	hasCheckedRestore = 0x4,
 	hasCheckedCC = 0x8,
+	hasChange = 0x10,
+	hasBR = 0x20,
 }
 
 import {
@@ -13,17 +16,17 @@ import {
 
 export class BasicBlock {
 	public instructions: Instruction[] = []; 			// Instruction at the same memory address
-	public subroutineNum: number = NaN;					// Subroutine ID
+	public subroutineNum: number = NaN;					  // Subroutine ID
 	public overlapNumber: number = NaN;						// Subroutine ID of the other subroutine, if any
-	public nextBlock: BasicBlock | null = null;  // Next block pointer
-	public brBlock: BasicBlock | null = null;		// Branch block pointer
+	public nextBlock: BasicBlock | null = null;   // Next block pointer
+	public brBlock: BasicBlock | null = null;		  // Branch block pointer
 	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
-	public flags: number = 0;											// Flags - see BBFLAG structure definition
+	public flags: number = BBFLAG.none;						// Flags - see BBFLAG structure definition
 	public reguse: Array<number>;									// Register use array. 0 for not used, -1 for last access is write, 1 for last access is read
 	public savedReg: Array<boolean>; 							// Register save array. true for callee-saved, only valid for entry blocks
 	public restoredReg: Array<boolean>; 					// Register restore array. true for callee-saved, only valid for entry and exit blocks
-	public cc: number = 0; 												// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
-	public initialCC: number = CC.nzp; 					// Initial CC, 1 means the CC is possible to appear in the condition code
+	public cc: CC = CC.none; 											// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
+	public initialCC: CC = CC.none; 							// Initial CC, 1 means the CC is possible to appear in the condition code
 
 	constructor() {
 		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -126,13 +129,13 @@ export class BasicBlock {
 	}
 
 	// Check CC possibility in this block
-	public checkCC(preCC: number) {
-		let idx: number, i: number;
+	public checkCC(preCC: number): number {
+		let idx: number;
 		let instruction: Instruction;
 
-		// If CC didn't change, return immediately
-		if (this.initialCC == preCC) {
-			return;
+		// If initial CC didn't change, return immediately
+		if (preCC == (this.initialCC & preCC)) {
+			return this.flags & BBFLAG.hasChange;
 		}
 
 		// Merge cc
@@ -148,34 +151,99 @@ export class BasicBlock {
 			}
 			// Finds BR
 			if (instruction.optype == "BR") {
-				instruction.brPossibility = this.compareCC(this.cc, instruction);
+				this.compareCC(this.cc, instruction);
+				if ((instruction.flags & INSTFLAG.isAlwaysBR) && instruction.nextInstruction) {
+					// Dead path found, loop once more
+					this.flags |= BBFLAG.hasChange;
+				}
+				if ((instruction.flags & INSTFLAG.isNeverBR) && instruction.brTarget) {
+					// Dead path found, loop once more
+					this.flags |= BBFLAG.hasChange;
+				}
 				this.cc &= instruction.cc;
+				this.flags |= BBFLAG.hasBR;
 			}
 		}
 
-		// Check for next blocks
+		if (this.flags & BBFLAG.hasBR) {
+			// Next block
+			if (this.nextBlock) {
+				this.flags |= this.nextBlock.checkCC(~this.cc & this.initialCC) & BBFLAG.hasChange;
+			}
+			// BR block
+			if (this.brBlock) {
+				this.flags |= this.brBlock.checkCC(this.cc) & BBFLAG.hasChange;
+			}
+		} else if (this.nextBlock) {
+			// Only check for next block
+			this.flags |= this.nextBlock.checkCC(this.cc) & BBFLAG.hasChange;
+		}
+
+		return this.flags & BBFLAG.hasChange;
+	}
+
+	// Clear all flags of this basic block and all next blocks and reset variables
+	public resetBlock() {
+		// Clear flags
+		if (this.flags == BBFLAG.none) {
+			return;
+		}
+		this.flags = BBFLAG.none;
+
+		// Reset variables
+		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0];
+		this.savedReg = [false, false, false, false, false, false, false, false];
+		this.restoredReg = [false, false, false, false, false, false, false, false];
+		this.cc = CC.none;
+		this.initialCC = CC.none;
+
 		if (this.nextBlock) {
 			// Next block
-			this.nextBlock.checkCC(~this.cc & CC.nzp);
+			this.nextBlock.resetBlock();
 		} if (this.brBlock) {
 			// Branch target
-			this.brBlock.checkCC(this.cc);
+			this.brBlock.resetBlock();
 		}
+
+		// Clear exit blocks
+		this.exitBlock = [];
 	}
 
 	// Compares a CC with a BR instruction. Returns 0 for conditional branch, 1 for always branch, -1 for redundant condition
-	private compareCC(cc: number, inst: Instruction): number {
-		if (cc == inst.cc) {
-			return 1;
-		} else if (!(cc & CC.n) && (inst.cc & CC.n) ||
-			!(cc & CC.z) && (inst.cc & CC.z) ||
-			!(cc & CC.p) && (inst.cc & CC.p)) {
-			return -1;
+	private compareCC(cc: number, inst: Instruction) {
+		// Clear previous flags
+		if (inst.cc == CC.nzp) {
+			return;
 		}
-		return 0;
+		inst.flags &= ~(INSTFLAG.isAlwaysBR | INSTFLAG.isNeverBR | INSTFLAG.isNeverBR);
+		// Always branch
+		if (cc == inst.cc) {
+			inst.flags |= INSTFLAG.isAlwaysBR;
+		}
+		// Redundant CC
+		if (!(cc & CC.n) && (inst.cc & CC.n)) {
+			inst.cc &= ~CC.n;
+			inst.redundantCC |= CC.n;
+			inst.flags |= INSTFLAG.hasRedundantCC;
+		}
+		if (!(cc & CC.z) && (inst.cc & CC.z)) {
+			inst.cc &= ~CC.z;
+			inst.redundantCC |= CC.z;
+			inst.flags |= INSTFLAG.hasRedundantCC;
+		}
+		if (!(cc & CC.p) && (inst.cc & CC.p)) {
+			inst.cc &= ~CC.p;
+			inst.redundantCC |= CC.p;
+			inst.flags |= INSTFLAG.hasRedundantCC;
+		}
+		// Never branch
+		if ((cc & inst.cc) == CC.none) {
+			inst.flags |= INSTFLAG.isNeverBR;
+		}
 	}
 
+	// Returns whether a block is a return block
 	private isRETBlock(): boolean {
-		return (this.instructions[this.instructions.length - 1].optype == "RET");
+		return this.instructions[this.instructions.length - 1].optype == "RET";
 	}
 }

@@ -29,6 +29,7 @@ import {
   completionItems,
   updateCompletionItems
 } from './completion'
+import { Code } from "./code";
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -122,7 +123,11 @@ connection.onDidChangeConfiguration(change => {
   }
 
   // Revalidate all open text documents
-  documents.all().forEach(validateTextDocument);
+  const docs = documents.all();
+  for (let i = 0; i < docs.length; i++) {
+    const code = new Code(docs[i].getText());
+    validateTextDocument(docs[i], code);
+  }
 });
 
 export function getDocumentSettings(resource: string): Thenable<ExtensionSettings> {
@@ -148,8 +153,9 @@ documents.onDidClose(e => {
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
-  validateTextDocument(change.document);
-  updateCompletionItems(change.document);
+  const code = new Code(change.document.getText());
+  validateTextDocument(change.document, code);
+  updateCompletionItems(code);
 });
 
 // Simplify the interface
@@ -159,7 +165,7 @@ export interface DiagnosticInfo {
   settings: ExtensionSettings;
 }
 
-export async function validateTextDocument(textDocument: TextDocument): Promise<void> {
+export async function validateTextDocument(textDocument: TextDocument, code: Code): Promise<void> {
   // Get the settings of the document
   const settings = await getDocumentSettings(textDocument.uri);
   const diagnostics: Diagnostic[] = [];
@@ -170,7 +176,7 @@ export async function validateTextDocument(textDocument: TextDocument): Promise<
   };
 
   // Generate diagnostics
-  generateDiagnostics(diagnosticInfo);
+  generateDiagnostics(diagnosticInfo, code);
   // Send the computed diagnostics to VSCode.
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
