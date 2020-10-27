@@ -6,6 +6,7 @@ export enum BBFLAG {
 	hasCheckedCC = 0x8,
 	hasChange = 0x10,
 	hasBR = 0x20,
+	hasSetCC = 0x40,
 }
 
 import {
@@ -23,8 +24,9 @@ export class BasicBlock {
 	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
 	public flags: number = BBFLAG.none;						// Flags - see BBFLAG structure definition
 	public reguse: Array<number>;									// Register use array. 0 for not used, -1 for last access is write, 1 for last access is read
-																								// Reguse[8] is CC usage
+	// Reguse[8] is CC usage
 	public savedReg: Array<boolean>; 							// Register save array. true for callee-saved, only valid for entry blocks
+	public savedRegMem: Array<string>; 						// Register save information: which memory location is saved to
 	public restoredReg: Array<boolean>; 					// Register restore array. true for callee-saved, only valid for entry and exit blocks
 	public cc: CC = CC.none; 											// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
 	public initialCC: CC = CC.none; 							// Initial CC, 1 means the CC is possible to appear in the condition code
@@ -32,6 +34,7 @@ export class BasicBlock {
 	constructor() {
 		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0, 0];  // Added one extra slot for cc
 		this.savedReg = [false, false, false, false, false, false, false, false];
+		this.savedRegMem = ["", "", "", "", "", "", "", ""];
 		this.restoredReg = [false, false, false, false, false, false, false, false];
 	}
 
@@ -83,6 +86,7 @@ export class BasicBlock {
 				instruction.flags |= INSTFLAG.isDead;
 				continue;
 			}
+			// Mark reguse accordingly
 			if (!isNaN(instruction.dest)) {
 				this.reguse[instruction.dest] = -1;
 			}
@@ -92,8 +96,15 @@ export class BasicBlock {
 			if (!isNaN(instruction.src2)) {
 				this.reguse[instruction.src2] = 1;
 			}
+			// Special cases
 			if (instruction.optype == "BR") {
 				this.reguse[8] = 1;
+			} else if (instruction.optype == "JSR") {
+				// Assume nothing for JSR for now. 
+				// TODO: analyze inputs and change this
+				for (i = 0; i < 8; i++) {
+					this.reguse[i] = 1;
+				}
 			} else if (instruction.setCC()) {
 				this.reguse[8] = -1;
 			}
@@ -103,7 +114,7 @@ export class BasicBlock {
 
 	// Check for restored register in this block
 	public checkRestoredReg(bb: BasicBlock) {
-		let idx: number, i: number;
+		let idx: number;
 		let instruction: Instruction;
 
 		if (this.flags & BBFLAG.hasCheckedRestore) {
@@ -111,6 +122,7 @@ export class BasicBlock {
 		}
 		this.flags |= BBFLAG.hasCheckedRestore;
 
+		// DFS
 		if (this.nextBlock) {
 			this.nextBlock.checkRestoredReg(bb);
 		}
@@ -126,8 +138,7 @@ export class BasicBlock {
 			for (idx = this.instructions.length - 2; idx >= 0; idx--) {
 				instruction = this.instructions[idx];
 				// Not a load operation, give up
-				if (instruction.optype != "LD" &&
-					instruction.optype != "LDR") {
+				if (instruction.optype != "LD") {
 					break;
 				}
 				// Record saved registers
@@ -156,6 +167,7 @@ export class BasicBlock {
 			// Reset CC possiblity
 			if (instruction.setCC()) {
 				this.cc = CC.nzp;
+				this.flags |= BBFLAG.hasSetCC;
 			}
 			// Finds BR
 			if (instruction.optype == "BR") {
@@ -173,10 +185,12 @@ export class BasicBlock {
 			}
 		}
 
+		// Check for next/br blocks according to whether the last instruction is BR
 		if (this.flags & BBFLAG.hasBR) {
 			// Next block
 			if (this.nextBlock) {
-				this.flags |= this.nextBlock.checkCC(~this.cc & this.initialCC) & BBFLAG.hasChange;
+				let mask: CC = this.flags & BBFLAG.hasSetCC ? CC.nzp : this.initialCC;
+				this.flags |= this.nextBlock.checkCC(~this.cc & mask) & BBFLAG.hasChange;
 			}
 			// BR block
 			if (this.brBlock) {
@@ -203,17 +217,17 @@ export class BasicBlock {
 			inst.flags |= INSTFLAG.isAlwaysBR;
 		}
 		// Redundant CC
-		if (!(cc & CC.n) && (inst.cc & CC.n)) {
+		if (~(cc & CC.n) & (inst.cc & CC.n)) {
 			inst.cc &= ~CC.n;
 			inst.redundantCC |= CC.n;
 			inst.flags |= INSTFLAG.hasRedundantCC;
 		}
-		if (!(cc & CC.z) && (inst.cc & CC.z)) {
+		if (~(cc & CC.z) & (inst.cc & CC.z)) {
 			inst.cc &= ~CC.z;
 			inst.redundantCC |= CC.z;
 			inst.flags |= INSTFLAG.hasRedundantCC;
 		}
-		if (!(cc & CC.p) && (inst.cc & CC.p)) {
+		if (~(cc & CC.p) & (inst.cc & CC.p)) {
 			inst.cc &= ~CC.p;
 			inst.redundantCC |= CC.p;
 			inst.flags |= INSTFLAG.hasRedundantCC;

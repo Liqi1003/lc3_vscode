@@ -174,13 +174,13 @@ function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruc
 			"The condition of this branch is always false.");
 	} else if (instruction.flags & INSTFLAG.hasRedundantCC) {
 		let str: string = "";
-		if(instruction.redundantCC & CC.n){
+		if (instruction.redundantCC & CC.n) {
 			str += "n";
 		}
-		if(instruction.redundantCC & CC.z){
+		if (instruction.redundantCC & CC.z) {
 			str += "z";
 		}
-		if(instruction.redundantCC & CC.p){
+		if (instruction.redundantCC & CC.p) {
 			str += "p";
 		}
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Redundant condition.", instruction.line,
@@ -267,7 +267,7 @@ function checkCodeOverlapBB(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code
 		return;
 	}
 	bb.flags |= BBFLAG.hasExplored;
-	
+
 	if (!isNaN(bb.overlapNumber)) {
 		if (bb.subroutineNum == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
@@ -300,18 +300,29 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 
 	for (idx = 0; idx < bb.instructions.length; idx++) {
 		instruction = bb.instructions[idx];
-		// Not a store operation, give up
-		if (instruction.optype != "ST" &&
-			instruction.optype != "STR") {
+		// Not a store operation, give up. Only support ST/LD pairs
+		if (instruction.optype != "ST") {
 			break;
 		}
+
+		// Generate warning according to the save instructions
+		if (bb.savedReg[instruction.src] == true) {
+			// Saved twice, warning
+			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
+				instruction.line, "You are saving R" + instruction.src + " multiple times. Is this a typo?");
+		}
+		for (i = 0; i < 8; i++) {
+			if (bb.savedRegMem[i] == instruction.mem) {
+				// Saved twice, warning
+				generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "The same memory location is used multiple times",
+					instruction.line, "You are saving multiple values into the same memory location " + instruction.mem + ". Is this a typo?");
+			}
+		}
+
 		// Record saved registers
 		if (bb.savedReg[instruction.src] == false) {
 			bb.savedReg[instruction.src] = true;
-		} else {
-			// Saved twice, warning
-			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
-				instruction.line, "You are saving R" + instruction.src + " multiple times, is this a typo?");
+			bb.savedRegMem[instruction.src] = instruction.mem;
 		}
 	}
 
@@ -360,17 +371,6 @@ function andWithRestore(new_restore: Array<boolean>, save: Array<boolean>, resto
 	for (i = 0; i < 8; i++) {
 		new_restore[i] = save[i] && restore[i];
 	}
-}
-
-function findBlockBySubroutine(subroutineNum: number, code: Code): BasicBlock {
-	let idx: number;
-	let bb: BasicBlock = new BasicBlock();
-	for (idx = 0; idx < code.basicBlocks.length; idx++) {
-		if (code.basicBlocks[idx].subroutineNum == subroutineNum) {
-			bb = code.basicBlocks[idx];
-		}
-	}
-	return bb;
 }
 
 // Check for unreachable code (Hint)
