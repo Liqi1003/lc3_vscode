@@ -23,13 +23,14 @@ export class BasicBlock {
 	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
 	public flags: number = BBFLAG.none;						// Flags - see BBFLAG structure definition
 	public reguse: Array<number>;									// Register use array. 0 for not used, -1 for last access is write, 1 for last access is read
+																								// Reguse[8] is CC usage
 	public savedReg: Array<boolean>; 							// Register save array. true for callee-saved, only valid for entry blocks
 	public restoredReg: Array<boolean>; 					// Register restore array. true for callee-saved, only valid for entry and exit blocks
 	public cc: CC = CC.none; 											// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
 	public initialCC: CC = CC.none; 							// Initial CC, 1 means the CC is possible to appear in the condition code
 
 	constructor() {
-		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0];
+		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0, 0];  // Added one extra slot for cc
 		this.savedReg = [false, false, false, false, false, false, false, false];
 		this.restoredReg = [false, false, false, false, false, false, false, false];
 	}
@@ -76,7 +77,9 @@ export class BasicBlock {
 		// Iterate backward
 		for (idx = this.instructions.length - 1; idx >= 0; idx--) {
 			instruction = this.instructions[idx];
-			if (!isNaN(instruction.dest) && this.reguse[instruction.dest] == -1) {
+			if (!isNaN(instruction.dest) &&
+				this.reguse[instruction.dest] == -1 &&
+				this.reguse[8] == -1) {
 				instruction.flags |= INSTFLAG.isDead;
 				continue;
 			}
@@ -88,6 +91,11 @@ export class BasicBlock {
 			}
 			if (!isNaN(instruction.src2)) {
 				this.reguse[instruction.src2] = 1;
+			}
+			if (instruction.optype == "BR") {
+				this.reguse[8] = 1;
+			} else if (instruction.setCC()) {
+				this.reguse[8] = -1;
 			}
 		}
 		return this.reguse;
@@ -182,40 +190,14 @@ export class BasicBlock {
 		return this.flags & BBFLAG.hasChange;
 	}
 
-	// Clear all flags of this basic block and all next blocks and reset variables
-	public resetBlock() {
-		// Clear flags
-		if (this.flags == BBFLAG.none) {
-			return;
-		}
-		this.flags = BBFLAG.none;
-
-		// Reset variables
-		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0];
-		this.savedReg = [false, false, false, false, false, false, false, false];
-		this.restoredReg = [false, false, false, false, false, false, false, false];
-		this.cc = CC.none;
-		this.initialCC = CC.none;
-
-		if (this.nextBlock) {
-			// Next block
-			this.nextBlock.resetBlock();
-		} if (this.brBlock) {
-			// Branch target
-			this.brBlock.resetBlock();
-		}
-
-		// Clear exit blocks
-		this.exitBlock = [];
-	}
-
 	// Compares a CC with a BR instruction. Returns 0 for conditional branch, 1 for always branch, -1 for redundant condition
 	private compareCC(cc: number, inst: Instruction) {
 		// Clear previous flags
 		if (inst.cc == CC.nzp) {
 			return;
 		}
-		inst.flags &= ~(INSTFLAG.isAlwaysBR | INSTFLAG.isNeverBR | INSTFLAG.isNeverBR);
+		// Clear flags
+		inst.flags &= ~(INSTFLAG.isAlwaysBR | INSTFLAG.isNeverBR | INSTFLAG.hasRedundantCC);
 		// Always branch
 		if (cc == inst.cc) {
 			inst.flags |= INSTFLAG.isAlwaysBR;

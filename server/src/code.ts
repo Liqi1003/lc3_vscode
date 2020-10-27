@@ -25,22 +25,19 @@ export class Code {
 
   constructor(text: string) {
     let count: number = 0;
+    let ret: number;
     // First round
     this.buildInstructions(text);
     this.linkLabels();
-    this.analyzeCFG();
-    this.markSubroutines(text);
-    this.analyzeCode();
-    this.buildBlocks();
     // Forward-backword analyzation
-    // To prevent falling into infinite loop, added a count
-    while ((count < 10) && this.analyzeBlocks()) {
+    do {
       this.resetStatus();
       this.analyzeCFG();
       this.markSubroutines(text);
       this.analyzeCode();
-      count += 1;
-    }
+      this.buildBlocks();
+      ret = this.analyzeBlocks();
+    } while (++count < 10 && ret);
     console.log(this);
   }
 
@@ -443,17 +440,13 @@ export class Code {
   private resetStatus() {
     let idx: number;
     let instruction: Instruction;
-    let bb: BasicBlock;
     // Clear flags in instructions
     for (idx = 0; idx < this.instructions.length; idx++) {
       instruction = this.instructions[idx];
-      instruction.flags &= ~(INSTFLAG.isFound | INSTFLAG.isDead);
+      instruction.flags &= ~(INSTFLAG.isFound);
     }
-    // Reset blocks
-    for (idx = 0; idx < this.basicBlocks.length; idx++) {
-      bb = this.basicBlocks[idx];
-      bb.resetBlock();
-    }
+    // Clear basic blocks
+    this.basicBlocks = [];
   }
 
 }
