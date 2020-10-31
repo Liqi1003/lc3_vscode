@@ -323,7 +323,8 @@ export class Instruction {
       default:
         // LABEL
         this.optype = "LABEL";
-        this.mem = instlst[0];
+        // Handle the case like LABEL.BLKW #1
+        this.mem = instlst[0].split('.')[0];
         break;
     }
 
@@ -395,6 +396,7 @@ export class Instruction {
         return true;
       // LC3v3, lea not set cc
       case "LEA":
+      case "TRAP":
         return true;
       default:
         return false;
