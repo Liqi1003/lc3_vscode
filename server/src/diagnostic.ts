@@ -188,17 +188,6 @@ function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruc
 	}
 }
 
-function findLabelByAddress(code: Code, address: number): Label {
-	let i: number;
-	let label = new Label(new Instruction(""));
-	for (i = 0; i < code.labels.length; i++) {
-		if (code.labels[i].memAddr == address) {
-			label = code.labels[i];
-		}
-	}
-	return label;
-}
-
 // Check for code before .ORIG (Error) and code after .END (Warning)
 function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
 	let idx: number, i: number;
@@ -271,14 +260,14 @@ function checkCodeOverlapBB(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code
 	if (!isNaN(bb.overlapNumber)) {
 		if (bb.subroutineNum == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
-				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and main code.");
+				"This instruction is shared by subroutine " + code.findLabelByAddress(bb.overlapNumber).name + " and main code.");
 		} else if (bb.overlapNumber == code.startAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutine and main code.", bb.instructions[0].line,
-				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.subroutineNum).name + " and main code.");
+				"This instruction is shared by subroutine " + code.findLabelByAddress(bb.subroutineNum).name + " and main code.");
 		} else {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Code overlap between subroutines.", bb.instructions[0].line,
-				"This instruction is shared by subroutine " + findLabelByAddress(code, bb.overlapNumber).name + " and subroutine " +
-				findLabelByAddress(code, bb.instructions[0].memAddr).name + ".");
+				"This instruction is shared by subroutine " + code.findLabelByAddress(bb.overlapNumber).name + " and subroutine " +
+				code.findLabelByAddress(bb.instructions[0].memAddr).name + ".");
 		}
 	}
 
@@ -330,7 +319,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		andWithRestore(bb.restoredReg, bb.savedReg, bb.exitBlock[idx].restoredReg);
 	}
 
-	label = findLabelByAddress(code, bb.subroutineNum);
+	label = code.findLabelByAddress(bb.subroutineNum);
 	// Generate string
 	str = "";
 	// R7 is always caller-saved

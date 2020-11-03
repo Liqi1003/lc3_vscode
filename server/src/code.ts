@@ -41,6 +41,18 @@ export class Code {
     console.log(this);
   }
 
+  // Returns the label at the specified address
+  public findLabelByAddress(address: number): Label {
+    let i: number;
+    let label = new Label(new Instruction(""));
+    for (i = 0; i < this.labels.length; i++) {
+      if (this.labels[i].memAddr == address) {
+        label = this.labels[i];
+      }
+    }
+    return label;
+  }
+
   private buildInstructions(text: string) {
     let lines = text.split('\n');
     let instruction: Instruction;
@@ -59,26 +71,12 @@ export class Code {
         }
       }
       if (line) {
+        // TODO: Might want to rewrite this one
         instruction = new Instruction(line);
         // Handle .STRINGZ in multiple line manner
         if (instruction.optype == ".STRINGZ" && instruction.mem &&
-          instruction.mem[instruction.mem.length - 1] != '"') {
-          while (++idx < lines.length) {
-            this.lineNum++
-            instruction.mem = instruction.mem + '\n';
-            line = lines[idx];
-            line = line.trim();
-            for (i = 0; i < line.length; i++) {
-              if (line[i] == ';') {
-                line = line.slice(0, i);
-                break;
-              }
-            }
-            instruction.mem = instruction.mem + line;
-            if (line[line.length - 1] == '"') {
-              break;
-            }
-          }
+          instruction.mem.split('"').length < 3) {
+          idx = this.parseSTRINGZ(instruction, idx, lines);
         }
         this.pushInstruction(instruction);
 
@@ -87,6 +85,11 @@ export class Code {
           line = line.slice(instruction.mem.length).trim();
           if (line) {
             instruction = new Instruction(line);
+            // Handle .STRINGZ in multiple line manner
+            if (instruction.optype == ".STRINGZ" && instruction.mem &&
+              instruction.mem.split('"').length < 3) {
+              idx = this.parseSTRINGZ(instruction, idx, lines);
+            }
             this.pushInstruction(instruction);
           }
         }
@@ -105,6 +108,30 @@ export class Code {
         }
       }
     }
+  }
+
+  // Replicated code for STRINGZ. Returns the idx after pushing the STRINGZ
+  private parseSTRINGZ(instruction: Instruction, idx: number, lines: string[]): number {
+    let i: number;
+    let line: string;
+    while (++idx < lines.length) {
+      this.lineNum++;
+      instruction.mem = instruction.mem + '\n';
+      line = lines[idx];
+      for (i = 0; i < line.length; i++) {
+        if (line[i] == ';') {
+          line = line.slice(0, i);
+          break;
+        }
+      }
+      instruction.mem = instruction.mem + line;
+      for (i = 0; i < line.length; i++) {
+        if (line[i] == '"') {
+          return idx;
+        }
+      }
+    }
+    return idx;
   }
 
   // Push an instruction according to its type (push/not push/push to label)
@@ -204,7 +231,12 @@ export class Code {
       if (instruction.optype == "JSR") {
         // JSR
         instruction.jsrTarget = this.getTarget(idx);
-      } else if (instruction.optype == "BR") {
+      } else if (idx > 0 && instruction.optype == "JSRR") {
+        if (this.instructions[idx - 1].optype == "LD") {
+          instruction.jsrTarget = this.getJSRRTarget(idx - 1);
+        }
+      }
+      else if (instruction.optype == "BR") {
         // BR
         instruction.brTarget = this.getTarget(idx);
         if (instruction.flags & INSTFLAG.isNeverBR) {
@@ -351,6 +383,25 @@ export class Code {
     return null;
   }
 
+  // Get the instruction according to the previous instruction
+  private getJSRRTarget(idx: number): Instruction | null {
+    let i: number, j: number;
+    let instruction: Instruction | null;
+    for (i = 0; i < this.labels.length; i++) {
+      if (this.labels[i].name == this.instructions[idx].mem) {
+        instruction = this.labels[i].instruction;
+        if (instruction) {
+          for (j = 0; j < this.labels.length; j++) {
+            if (this.labels[j].name == instruction.mem) {
+              return this.labels[j].instruction;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   private buildBlocks() {
     let bb: BasicBlock;
     let instruction: Instruction;
@@ -448,5 +499,4 @@ export class Code {
     // Clear basic blocks
     this.basicBlocks = [];
   }
-
 }
