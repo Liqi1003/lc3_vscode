@@ -3,7 +3,7 @@
 <font color=#1E90FF size=5 >
 Introduction
 </font><br>
-
+<br>
 This extension is aimed to help the students in studying of LC3 assembly language. 
 
 It is developed based on **Patt And Patel Introduction To Computing Systems 2nd Edition**.
@@ -15,7 +15,7 @@ Note that if you are using another edition of the book, or you are using a diffe
 <font color=#1E90FF size=5 >
 Functionality
 </font><br>
-
+<br>
 <font color=#1E90FF size=4 >
 Syntax highlighting
 </font><br>
@@ -108,13 +108,13 @@ Reports the callee-saved registers in a subroutine if they are laid out as conse
 Uncalled subroutines
 </font><br>
 
-If you want to write a subroutine before writing the invocation somewhere else, you can prevent this warning by adding a comment `;@SUBROUTINE` on the line right above the subroutine label. You can also do this by using the quick fix provided when you select the subroutine labe.
+If you want to write a subroutine before writing the invocation somewhere else, you can prevent this warning by adding a comment `; @SUBROUTINE` in the line right above the subroutine label. You can also do this by using the quick fix provided when you select the subroutine label.
 
 <font color=#6495ED size=4 >
 Auto Completions of keywords and labels
 </font><br>
 
-All labels in the file can be autocompleted.
+All labels in the file can be autocompleted using VScode's tab completion.
 
 Also, you can see the example usage of different opcodes if you type it and see "related information".
 
@@ -123,7 +123,7 @@ Also, you can see the example usage of different opcodes if you type it and see 
 <font color=#1E90FF size=5 >
 Configurations
 </font><br>
-
+<br>
 <font color=#1E90FF size=4 >
 showErrors
 </font><br>
@@ -152,7 +152,10 @@ Enables subroutine analysis for calling interfaces, saved registers etc.
 
 ***
 
-## COPYRIGHT
+<font color=#1E90FF size=5 >
+COPYRIGHT
+</font><br>
+<br>
 Copyright © 2020 <qili@illinois.edu>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
