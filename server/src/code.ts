@@ -24,28 +24,25 @@ export class Code {
   private stack: Stack<Instruction> = new Stack<Instruction>(); // Stack used for building CFG
 
   constructor(text: string) {
-    let count: number = 0;
-    let ret: number;
     // First round
     this.buildInstructions(text);
     this.linkLabels();
-    // Forward-backword analyzation
-    do {
+    // Forward-backword analyzation (up to 3 times)
+    for (let i = 0; i < 3; i++) {
       this.resetStatus();
       this.analyzeCFG();
       this.markSubroutines(text);
       this.analyzeCode();
       this.buildBlocks();
-      ret = this.analyzeBlocks();
-    } while (++count < 10 && ret);
-    console.log(this);
+      this.analyzeBlocks();
+    }
+    // console.log(this);
   }
 
   // Returns the label at the specified address
   public findLabelByAddress(address: number): Label {
-    let i: number;
     let label = new Label(new Instruction(""));
-    for (i = 0; i < this.labels.length; i++) {
+    for (let i = 0; i < this.labels.length; i++) {
       if (this.labels[i].memAddr == address) {
         label = this.labels[i];
       }
@@ -53,18 +50,18 @@ export class Code {
     return label;
   }
 
+  // Build all instructions in the code
   private buildInstructions(text: string) {
     let lines = text.split('\n');
     let instruction: Instruction;
-    let idx: number, i: number;
     let line: string;
 
     // Construct each instruction
-    for (idx = 0; idx < lines.length; idx++) {
+    for (let idx = 0; idx < lines.length; idx++) {
       line = lines[idx];
       // Preprocess the line, removing spaces and comments
       line = line.trim();
-      for (i = 0; i < line.length; i++) {
+      for (let i = 0; i < line.length; i++) {
         if (line[0] == ';' || (line[i] == ';' && (line[i - 1] == ' ' || line[i - 1] == '\t'))) {
           line = line.slice(0, i);
           break;
@@ -101,10 +98,10 @@ export class Code {
     if (isNaN(this.startAddr)) {
       this.firstInstrIdx = 0;
     } else {
-      for (idx = 0; idx < this.instructions.length; idx++) {
-        instruction = this.instructions[idx];
+      for (let i = 0; i < this.instructions.length; i++) {
+        instruction = this.instructions[i];
         if (instruction.memAddr == this.startAddr) {
-          this.firstInstrIdx = idx;
+          this.firstInstrIdx = i;
         }
       }
     }
@@ -112,20 +109,19 @@ export class Code {
 
   // Replicated code for STRINGZ. Returns the idx after pushing the STRINGZ
   private parseSTRINGZ(instruction: Instruction, idx: number, lines: string[]): number {
-    let i: number;
     let line: string;
     while (++idx < lines.length) {
       this.lineNum++;
       instruction.mem = instruction.mem + '\n';
       line = lines[idx];
-      for (i = 0; i < line.length; i++) {
+      for (let i = 0; i < line.length; i++) {
         if (line[i] == ';') {
           line = line.slice(0, i);
           break;
         }
       }
       instruction.mem = instruction.mem + line;
-      for (i = 0; i < line.length; i++) {
+      for (let i = 0; i < line.length; i++) {
         if (line[i] == '"') {
           return idx;
         }
@@ -137,7 +133,6 @@ export class Code {
   // Push an instruction according to its type (push/not push/push to label)
   private pushInstruction(instruction: Instruction) {
     let label: Label;
-    let i: number;
     // Keep track of line numbers
     instruction.line = this.lineNum;
 
@@ -170,7 +165,7 @@ export class Code {
           instruction.mem.slice(1, instruction.mem.length - 1);
           this.memAddr += instruction.mem.length;
         }
-        for (i = 0; i < instruction.mem.length; i++) {
+        for (let i = 0; i < instruction.mem.length; i++) {
           // Take out the '\' characters
           if (instruction.mem[i] == '\\') {
             this.memAddr--;
@@ -193,14 +188,13 @@ export class Code {
 
   // Link labels with the instruction at that memory location
   private linkLabels() {
-    let label_idx: number, instruction_idx: number;
     // Skip labels and instructions before .ORIG
-    for (label_idx = 0; label_idx < this.labels.length && this.labels[label_idx].memAddr == 0; label_idx++);
-    for (instruction_idx = 0; instruction_idx < this.instructions.length && this.instructions[instruction_idx].memAddr == 0; instruction_idx++);
+    for (let i = 0; i < this.labels.length && this.labels[i].memAddr == 0; i++);
+    for (let i = 0; i < this.instructions.length && this.instructions[i].memAddr == 0; i++);
 
     // Feeling lazy, may revise the structure here
-    for (instruction_idx = 0; instruction_idx < this.instructions.length; instruction_idx++) {
-      for (label_idx = 0; label_idx < this.labels.length; label_idx++) {
+    for (let instruction_idx = 0; instruction_idx < this.instructions.length; instruction_idx++) {
+      for (let label_idx = 0; label_idx < this.labels.length; label_idx++) {
         if (this.instructions[instruction_idx].memAddr == this.labels[label_idx].memAddr) {
           this.labels[label_idx].instruction = this.instructions[instruction_idx];
         }
@@ -210,12 +204,11 @@ export class Code {
 
   // Build the CFG of the given code
   private analyzeCFG() {
-    let idx: number;
     let instruction: Instruction;
     let next: Instruction | null;
 
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
+    for (let i = 0; i < this.instructions.length; i++) {
+      instruction = this.instructions[i];
       // Skip data
       if (instruction.memAddr == 0 || instruction.isData()) {
         continue;
@@ -225,20 +218,20 @@ export class Code {
         instruction.incomingArcs = 1;
       }
       // Link instructions
-      if (idx + 1 < this.instructions.length) {
-        instruction.nextInstruction = this.instructions[idx + 1];
+      if (i + 1 < this.instructions.length) {
+        instruction.nextInstruction = this.instructions[i + 1];
       }
       if (instruction.optype == "JSR") {
         // JSR
-        instruction.jsrTarget = this.getTarget(idx);
-      } else if (idx > 0 && instruction.optype == "JSRR") {
-        if (this.instructions[idx - 1].optype == "LD") {
-          instruction.jsrTarget = this.getJSRRTarget(idx - 1);
+        instruction.jsrTarget = this.getTarget(i);
+      } else if (i > 0 && instruction.optype == "JSRR") {
+        if (this.instructions[i - 1].optype == "LD") {
+          instruction.jsrTarget = this.getJSRRTarget(i - 1);
         }
       }
       else if (instruction.optype == "BR") {
         // BR
-        instruction.brTarget = this.getTarget(idx);
+        instruction.brTarget = this.getTarget(i);
         if (instruction.flags & INSTFLAG.isNeverBR) {
           instruction.brTarget = null;
         }
@@ -251,14 +244,15 @@ export class Code {
         instruction.nextInstruction = null;
       }
     }
-    for (idx = 0; idx < this.instructions.length; idx++) {
+
+    for (let i = 0; i < this.instructions.length; i++) {
       // Next instruction
-      next = this.instructions[idx].nextInstruction;
+      next = this.instructions[i].nextInstruction;
       if (next) {
         next.incomingArcs++;
       }
       // Branch target
-      next = this.instructions[idx].brTarget;
+      next = this.instructions[i].brTarget;
       if (next) {
         next.incomingArcs++;
       }
@@ -268,14 +262,13 @@ export class Code {
   // Mark subroutines according to #pragma
   private markSubroutines(text: string) {
     let lines = text.split('\n');
-    let idx: number;
     let instruction: Instruction, target: Instruction;
     let line: string;
     let label: Label;
 
     // Mark subroutines with JSR
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
+    for (let i = 0; i < this.instructions.length; i++) {
+      instruction = this.instructions[i];
       if (instruction.jsrTarget) {
         target = instruction.jsrTarget;
         target.flags |= INSTFLAG.isSubroutineStart;
@@ -284,10 +277,10 @@ export class Code {
     }
 
     // Iterate through all lines except for the last line for pragma
-    for (idx = 0; idx < lines.length - 1; idx++) {
-      line = lines[idx];
+    for (let i = 0; i < lines.length - 1; i++) {
+      line = lines[i];
       if (line.match("@SUBROUTINE")) {
-        label = this.findLabelByLine(idx + 1);
+        label = this.findLabelByLine(i + 1);
         if (label.instruction) {
           label.instruction.flags |= INSTFLAG.isSubroutineStart;
           label.instruction.subroutineNum = label.instruction.memAddr;
@@ -298,10 +291,9 @@ export class Code {
 
   // Returns the label at the specified line number (assuming line number is always legal)
   private findLabelByLine(line: number): Label {
-    let idx: number;
     let label: Label;
-    for (idx = 0; idx < this.labels.length; idx++) {
-      label = this.labels[idx];
+    for (let i = 0; i < this.labels.length; i++) {
+      label = this.labels[i];
       if (label.line == line) {
         return label;
       }
@@ -312,7 +304,6 @@ export class Code {
 
   // Analyze code
   private analyzeCode() {
-    let idx: number;
     let instruction: Instruction;
     // Analyze main code
     if (this.instructions.length > 0) {
@@ -320,8 +311,8 @@ export class Code {
     }
 
     // Analyze subroutines
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
+    for (let i = 0; i < this.instructions.length; i++) {
+      instruction = this.instructions[i];
       if (instruction.flags & INSTFLAG.isSubroutineStart) {
         this.iterateCode(instruction, instruction.subroutineNum);
       }
@@ -374,8 +365,7 @@ export class Code {
 
   // Get the instruction according to label
   private getTarget(idx: number): Instruction | null {
-    let i: number;
-    for (i = 0; i < this.labels.length; i++) {
+    for (let i = 0; i < this.labels.length; i++) {
       if (this.labels[i].name == this.instructions[idx].mem) {
         return this.labels[i].instruction;
       }
@@ -385,13 +375,15 @@ export class Code {
 
   // Get the instruction according to the previous instruction
   private getJSRRTarget(idx: number): Instruction | null {
-    let i: number, j: number;
     let instruction: Instruction | null;
-    for (i = 0; i < this.labels.length; i++) {
+    // Iterate through all labels for the storage
+    for (let i = 0; i < this.labels.length; i++) {
+      // Found the memory location
       if (this.labels[i].name == this.instructions[idx].mem) {
         instruction = this.labels[i].instruction;
         if (instruction) {
-          for (j = 0; j < this.labels.length; j++) {
+          // Iterate throuth all labels for the subroutine
+          for (let j = 0; j < this.labels.length; j++) {
             if (this.labels[j].name == instruction.mem) {
               return this.labels[j].instruction;
             }
@@ -402,18 +394,18 @@ export class Code {
     return null;
   }
 
+  // Build the basic blocks structure
   private buildBlocks() {
     let bb: BasicBlock;
     let instruction: Instruction;
-    let idx: number;
 
     // Explore the main routine
     bb = this.buildOneBlock(this.instructions[this.firstInstrIdx], this.startAddr);
     this.basicBlocks.push(bb);
 
     // Explore subroutines
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
+    for (let i = 0; i < this.instructions.length; i++) {
+      instruction = this.instructions[i];
       if (instruction.flags & INSTFLAG.isSubroutineStart) {
         bb = this.buildOneBlock(instruction, instruction.subroutineNum);
         this.basicBlocks.push(bb);
@@ -473,30 +465,21 @@ export class Code {
   // Analyze blocks, including dead code, CC and save-restore checking
   // Returns 0 if there are no change to the CFG; non-zero otherwise
   private analyzeBlocks(): number {
-    let idx: number;
     let ret: number = 0;
 
-    for (idx = 0; idx < this.basicBlocks.length; idx++) {
-      this.basicBlocks[idx].checkDeadCode();
-      ret |= this.basicBlocks[idx].checkCC(CC.nzp);
-      // Only check for save-restore registers in subroutines
-      if (idx > 0) {
-        this.basicBlocks[idx].checkRestoredReg(this.basicBlocks[idx]);
-      }
+    for (let i = 0; i < this.basicBlocks.length; i++) {
+      this.basicBlocks[i].analyzeBackward(this.basicBlocks[i]);
+      ret |= this.basicBlocks[i].analyzeForward(CC.nzp);
     }
     return ret;
   }
 
   // Reset relevant flags in instructions and basic blocks
   private resetStatus() {
-    let idx: number;
-    let instruction: Instruction;
     // Clear flags in instructions
-    for (idx = 0; idx < this.instructions.length; idx++) {
-      instruction = this.instructions[idx];
-      instruction.flags &= ~(INSTFLAG.isFound);
+    for (let i = 0; i < this.instructions.length; i++) {
+      this.instructions[i].flags &= ~(INSTFLAG.isFound);
     }
-    // Clear basic blocks
     this.basicBlocks = [];
   }
 }

@@ -26,13 +26,14 @@ import {
 import {
 	BasicBlock,
 	BBFLAG,
+	REGFLAG,
+	REGSTAT,
 } from "./basicBlock";
 
 // For code action
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
 export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let idx: number;
 	let instruction: Instruction;
 
 	/** Global checking */
@@ -41,7 +42,9 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 
 	// Check for unreachable instructions
 	checkUnreachableInstructions(diagnosticInfo, code);
-	checkUncalledSubroutines(diagnosticInfo, code);
+	if (diagnosticInfo.settings.enableSubroutineCheckings) {
+		checkUncalledSubroutines(diagnosticInfo, code);
+	}
 
 	// Check for code before/after .ORIG/.END
 	checkORIGandEND(diagnosticInfo, code);
@@ -50,17 +53,19 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 	checkRunningIntoData(diagnosticInfo, code);
 
 	/** Block checking */
-	for (idx = 0; idx < code.basicBlocks.length; idx++) {
-		// Check for code overlap between subroutines and/or main code
-		checkCodeOverlapBB(code.basicBlocks[idx], diagnosticInfo, code);
-		if (code.basicBlocks[idx].subroutineNum != code.startAddr) {
-			// Check for caller/callee saved registers
-			checkCalleeSavedRegs(code.basicBlocks[idx], diagnosticInfo, code);
+	if (diagnosticInfo.settings.enableSubroutineCheckings) {
+		for (let idx = 0; idx < code.basicBlocks.length; idx++) {
+			// Check for code overlap between subroutines and/or main code
+			checkCodeOverlapBB(code.basicBlocks[idx], diagnosticInfo, code);
+			if (code.basicBlocks[idx].subroutineNum != code.startAddr) {
+				// Check for caller/callee saved registers
+				checkCalleeSavedRegs(code.basicBlocks[idx], diagnosticInfo, code);
+			}
 		}
 	}
 
 	/** Single line of code checking */
-	for (idx = 0; idx < code.instructions.length; idx++) {
+	for (let idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 
 		// Skip the instruction if it is not found
@@ -69,7 +74,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 		}
 
 		// Check for incomplete/illegal instructions
-		if (diagnosticInfo.settings.showIncompleteInstructions && (instruction.flags & INSTFLAG.isIncomplete)) {
+		if (diagnosticInfo.settings.showIllegalInstructions && (instruction.flags & INSTFLAG.isIncomplete)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Illegal or incomplete instruction.", instruction.line,
 				instruction.rawString + " is incomplete/illegal");
 			continue;
@@ -95,7 +100,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 				break;
 			case "BR":
 				if (instruction.mem) {
-					checkBRpossibility(diagnosticInfo, instruction, code);
+					checkBRpossibility(diagnosticInfo, instruction);
 					let labelID = checkPCoffset(diagnosticInfo, instruction, code, 9);
 					if (labelID >= 0) {
 						checkJumpToData(diagnosticInfo, instruction, code, labelID);
@@ -132,7 +137,8 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 			case "TRAP":
 				switch (instruction.immVal) {
 					case TRAPVEC.INVALID:
-						generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Unknown TRAP vector.", instruction.line, "");
+						// Removed
+						// generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Unknown TRAP vector.", instruction.line, "");
 						break;
 					case TRAPVEC.HALT:
 						if (instruction.subroutineNum != code.startAddr) {
@@ -145,18 +151,13 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 			case "RET":
 				if (instruction.subroutineNum == code.startAddr) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "RET outside of subroutine.", instruction.line,
-						"You are executing RET outside of a subroutine. Use 'JMP R7' if you really meant to do that.");
+						"You are executing RET outside of a subroutine. Use \"HALT\" to halt the machine, or \"JMP R7\" if you really meant it.");
 				}
 				break;
 			case ".FILL":
 			case ".STRINGZ":
 				break;
 			case ".BLKW":
-				if (!(instruction.flags & INSTFLAG.isIncomplete) && instruction.immValType != '#' && instruction.immValType != '0' && instruction.immValType != 'X' && instruction.immVal != 1) {
-					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Decimal number without #", instruction.line,
-						".BLKW directives view the number as decimal by default. If you meant to write a binary number, add a leading 0; if you \
-						meant to write a decimal number, add a leading #.");
-				}
 				break;
 			default:
 				break;
@@ -165,7 +166,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 }
 
 // Check for always BR and redundant conditions (Warning)
-function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruction, code: Code) {
+function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruction) {
 	if ((instruction.cc != CC.nzp) && (instruction.flags & INSTFLAG.isAlwaysBR)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Branch always taken.", instruction.line,
 			"The condition of this branch is always true, use BR/BRnzp for better readability.");
@@ -190,11 +191,10 @@ function checkBRpossibility(diagnosticInfo: DiagnosticInfo, instruction: Instruc
 
 // Check for code before .ORIG (Error) and code after .END (Warning)
 function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let idx: number, i: number;
 	let label: Label;
 	let instruction: Instruction;
-	for (idx = 0; idx < code.instructions.length; idx++) {
-		instruction = code.instructions[idx];
+	for (let i = 0; i < code.instructions.length; i++) {
+		instruction = code.instructions[i];
 		if (isNaN(instruction.memAddr)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Code before .ORIG directive.", instruction.line,
 				"Code before .ORIG is not allowed. Are you missing the .ORIG directive?");
@@ -203,11 +203,11 @@ function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
 				"Code after .END will be ignored.");
 		}
 	}
-	for (idx = 0; idx < code.labels.length; idx++) {
-		label = code.labels[idx];
+	for (let i = 0; i < code.labels.length; i++) {
+		label = code.labels[i];
 		if (isNaN(label.memAddr)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Code before .ORIG directive.", label.line,
-				"Label before .ORIG is not allowed.");
+				"Label before .ORIG is not allowed. Are you missing the .ORIG directive?");
 		} else if (label.memAddr >= code.endAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Code after .END directive.", label.line,
 				"Label after .END will be ignored.");
@@ -218,28 +218,27 @@ function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
 // Check for unusable label name (e.g. X123) (Warning), multiple labels at the same memory address (Warning, optional),
 // duplicated labels (Error) and ; after labels without a space (Warning)
 function checkLabels(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let idx: number, i: number;
 	let label: Label, label2: Label;
-	for (idx = 0; idx < code.labels.length; idx++) {
+	for (let idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		// Check for unusable label name
 		if (isLc3Num(label.name) || isLc3Reg(label.name)) {
-			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number.", label.line,
+			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number/register.", label.line,
 				"This label name will be recognized as a number or register name by the assembler, it will not be usable in any other instructions.");
 		}
 		// Check for multiple labels at the same line
-		if (diagnosticInfo.settings.showMultipleLabels && idx + 1 < code.labels.length && label.memAddr == code.labels[idx + 1].memAddr) {
+		if (idx + 1 < code.labels.length && label.memAddr == code.labels[idx + 1].memAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Multiple label at the same memory location.", label.line,
 				"Label " + label.name + " and " + code.labels[idx + 1].name + " are at the same memory location.");
 		}
 		// Check for ; in labels
 		if (label.flags & INSTFLAG.hasSemicolon) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Label name contains semicolon.", label.line,
-				"Semicolon(;) is not recognized as part of the label name. If you use the label name with trailing semicolon in other instructions, \
+				"Semicolon(;) is not recognized as part of the label name. However, if you use the label name with trailing semicolon in other instructions, \
 		then the assembler will not be able to find it.");
 		}
 		// Check for duplicated labels
-		for (i = idx + 1; i < code.labels.length; i++) {
+		for (let i = idx + 1; i < code.labels.length; i++) {
 			label2 = code.labels[i];
 			if (label.name == label2.name) {
 				generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Duplicated labels", label2.line,
@@ -281,13 +280,13 @@ function checkCodeOverlapBB(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code
 
 // Check for callee-saved registers (Hint) and mismatch (Warning)
 function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, code: Code) {
-	let idx: number, i: number;
 	let instruction: Instruction, ret: Instruction;
 	let exit: BasicBlock;
 	let label: Label;
-	let str: string;
+	let saved: string, input: string, nouse: string, result: string;
 
-	for (idx = 0; idx < bb.instructions.length; idx++) {
+	// Scan through the entry block
+	for (let idx = 0; idx < bb.instructions.length; idx++) {
 		instruction = bb.instructions[idx];
 		// Not a store operation, give up. Only support ST/LD pairs
 		if (instruction.optype != "ST") {
@@ -295,12 +294,12 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		}
 
 		// Generate warning according to the save instructions
-		if (bb.savedReg[instruction.src] == true) {
+		if (bb.regflag[instruction.src] & REGFLAG.S) {
 			// Saved twice, warning
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
 				instruction.line, "You are saving R" + instruction.src + " multiple times. Is this a typo?");
 		}
-		for (i = 0; i < 8; i++) {
+		for (let i = 0; i < 8; i++) {
 			if (bb.savedRegMem[i] == instruction.mem) {
 				// Saved twice, warning
 				generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "The same memory location is used multiple times",
@@ -309,66 +308,106 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		}
 
 		// Record saved registers
-		if (bb.savedReg[instruction.src] == false) {
-			bb.savedReg[instruction.src] = true;
+		if (~(bb.regflag[instruction.src] & REGFLAG.S)) {
+			bb.regflag[instruction.src] |= REGFLAG.S;
 			bb.savedRegMem[instruction.src] = instruction.mem;
 		}
 	}
 
-	for (idx = 0; idx < bb.exitBlock.length; idx++) {
-		andWithRestore(bb.restoredReg, bb.savedReg, bb.exitBlock[idx].restoredReg);
+	// Assume all registers are restored
+	for (let i = 0; i < 8; i++) {
+		bb.regflag[i] |= REGFLAG.R;
 	}
-
-	label = code.findLabelByAddress(bb.subroutineNum);
-	// Generate string
-	str = "";
-	// R7 is always caller-saved
-	for (idx = 0; idx < 7; idx++) {
-		if (bb.savedReg[idx] && bb.restoredReg[idx]) {
-			str = str + "R" + idx + " ";
+	// Scan through all exit blocks and get restoration status
+	for (let idx = 0; idx < bb.exitBlock.length; idx++) {
+		exit = bb.exitBlock[idx];
+		for (let i = 0; i < 8; i++) {
+			// Not restored
+			if (!(exit.regflag[i] & REGFLAG.R)) {
+				bb.regflag[i] &= ~REGFLAG.R;
+			}
 		}
 	}
-	if (str == "") {
-		str = "None"
+
+	// Generate saved register string
+	saved = "";
+	// R7 is always caller-saved
+	for (let i = 0; i < 7; i++) {
+		if (bb.regflag[i] == REGFLAG.SR || bb.regstat[i] == REGSTAT.none) {
+			saved = saved + "R" + i + " ";
+		}
 	}
+	if (saved == "") {
+		saved = "None"
+	}
+
+	// Generate input registers string
+	input = "";
+	for (let i = 0; i < 7; i++) {
+		if (bb.regflag[i] == REGFLAG.INPUT) {
+			input = input + "R" + i + " ";
+		}
+	}
+
+	// Generate not used register string
+	nouse = "";
+	for (let i = 0; i < 7; i++) {
+		if (bb.regstat[i] == REGSTAT.none) {
+			nouse = nouse + "R" + i + " ";
+		}
+	}
+
+	result = "\nCallee-saved Registers: " + saved;
+	// if (input) {
+	// 	result += "\nInput registers: " + input;
+	// }
+	// if (nouse) {
+	// 	result += "\nRegisters not used: " + nouse;
+	// }
+
+	label = code.findLabelByAddress(bb.subroutineNum);
+	// Check for R7
+	// if (bb.regflag[7] != REGFLAG.SR && bb.regstat[7] != REGSTAT.none) {
+	// 	generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Not saving R7",
+	// 		label.line, "R7 is potentially modified in this subroutine, but you didn't save and restore it correctly.");
+	// }
+
 	// Send subroutine callee-saved registers info
 	generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Information, [], "Subroutine " + label.name,
-		label.line, "Callee-saved Registers: " + str);
+		label.line, result);
 
 	// Check for each exit block
-	for (idx = 0; idx < bb.exitBlock.length; idx++) {
+	for (let idx = 0; idx < bb.exitBlock.length; idx++) {
 		exit = bb.exitBlock[idx];
 		ret = exit.instructions[exit.instructions.length - 1];
 		// Mismatch in registers
-		str = "";
-		for (i = 0; i < 8; i++) {
-			// Saved but not restored?
-			if (bb.savedReg[i] !== exit.restoredReg[i]) {
-				str = str + "R" + i + " ";
+		for (let i = 0; i < 8; i++) {
+			if (bb.savedRegMem[i] != exit.savedRegMem[i]) {
+				if (bb.savedRegMem[i] == "") {
+					// Not saved
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+						ret.line, "R" + i + " is not saved, but restored from " + exit.savedRegMem[i]);
+				} else if (exit.savedRegMem[i] == "") {
+					// Not restored
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but not restored.");
+				} else {
+					// Restoring from a different memory location
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
+						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but you are restoring it from " + exit.savedRegMem[i]);
+				}
 			}
 		}
-		// Mismatch non-empty, raise warning
-		if (str != "") {
-			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-				ret.line, "Mismatched registers: " + str);
-		}
-	}
-}
 
-function andWithRestore(new_restore: Array<boolean>, save: Array<boolean>, restore: Array<boolean>) {
-	let i: number;
-	for (i = 0; i < 8; i++) {
-		new_restore[i] = save[i] && restore[i];
 	}
 }
 
 // Check for unreachable code (Hint)
 function checkUnreachableInstructions(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let i: number;
 	let instruction: Instruction;
 
 	// Check for unreachable code
-	for (i = 0; i < code.instructions.length; i++) {
+	for (let i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
 		if (!instruction.isData() && !(instruction.flags & INSTFLAG.isFound)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
@@ -378,9 +417,8 @@ function checkUnreachableInstructions(diagnosticInfo: DiagnosticInfo, code: Code
 
 // Check for uncalled subroutines (Warning, provide fix)
 function checkUncalledSubroutines(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let i: number;
 	let label: Label;
-	for (i = 0; i < code.labels.length; i++) {
+	for (let i = 0; i < code.labels.length; i++) {
 		label = code.labels[i];
 		if (label.instruction && !label.instruction.isData() && !(label.instruction.flags & INSTFLAG.isFound)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], MESSAGE_POSSIBLE_SUBROUTINE, label.line,
@@ -429,17 +467,15 @@ function checkJumpToData(diagnosticInfo: DiagnosticInfo, instruction: Instructio
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Jumping/Branching to data.", instruction.line,
 				"The destination of this instruction is line " + (target.line + 1) + ", which is data.");
 		}
-	} else {
-		console.error("Tried to access labels[" + idx + "]");
 	}
 }
 
 // Check for running into data (Warning)
 function checkRunningIntoData(diagnosticInfo: DiagnosticInfo, code: Code) {
-	let idx: number, i: number;
+	let i: number;
 	let instruction: Instruction;
 	let nextInstruction: Instruction | null;
-	for (idx = 0; idx < code.instructions.length; idx++) {
+	for (let idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 		// Check the first instruction
 		if (idx == 0 && instruction.isData()) {
@@ -461,7 +497,6 @@ function checkRunningIntoData(diagnosticInfo: DiagnosticInfo, code: Code) {
 		if (nextInstruction && nextInstruction.isData()) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Running into data.", nextInstruction.line,
 				"The program may run into data after executing the instruction \"" + instruction.rawString + "\" at line " + (instruction.line + 1) + ".");
-
 		}
 	}
 }
@@ -476,7 +511,7 @@ function generateDiagnostic(diagnosticInfo: DiagnosticInfo, severity: Diagnostic
 			end: { line: line + 1, character: 0 }
 		},
 		message: message,
-		source: "lc3",
+		source: "LC3",
 		tags: tags
 	};
 	// Pass related info

@@ -25,16 +25,20 @@ export enum OPNUM {
 	PUTS,
 	PUTSP,
 	HALT,
+	R0,
+	R1,
+	R2,
+	R3,
+	R4,
+	R5,
+	R6,
+	R7,
 }
 
 import {
 	CompletionItem,
 	CompletionItemKind,
 } from 'vscode-languageserver';
-
-import {
-	TextDocument,
-} from 'vscode-languageserver-textdocument';
 
 import {
 	Code,
@@ -171,7 +175,47 @@ const defaultCompletionItems: CompletionItem[] = [
 		label: 'HALT',
 		kind: CompletionItemKind.Operator,
 		data: OPNUM.HALT
-	}
+	},
+	{
+		label: 'R0',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R0
+	},
+	{
+		label: 'R1',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R1
+	},
+	{
+		label: 'R2',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R2
+	},
+	{
+		label: 'R3',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R3
+	},
+	{
+		label: 'R4',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R4
+	},
+	{
+		label: 'R5',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R5
+	},
+	{
+		label: 'R6',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R6
+	},
+	{
+		label: 'R7',
+		kind: CompletionItemKind.Variable,
+		data: OPNUM.R7
+	},
 ];
 
 // To be sent to the server
@@ -180,12 +224,12 @@ export let completionItems: CompletionItem[];
 // Update completion item list according to the label names
 export function updateCompletionItems(code: Code) {
 	completionItems = [...defaultCompletionItems];
-	let idx: number, i: number;
+	let i: number;
 	let label: Label;
 	let instruction: Instruction;
 	let item: CompletionItem;
 	// Push labels
-	for (idx = 0; idx < code.labels.length; idx++) {
+	for (let idx = 0; idx < code.labels.length; idx++) {
 		label = code.labels[idx];
 		item = { label: label.name, kind: CompletionItemKind.Text, data: label.line };
 		for (i = 0; i < completionItems.length; i++) {
@@ -198,7 +242,7 @@ export function updateCompletionItems(code: Code) {
 		}
 	}
 	// Push labels in instructions
-	for (idx = 0; idx < code.instructions.length; idx++) {
+	for (let idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 		if (!(instruction.flags & INSTFLAG.isIncomplete) && instruction.isMemType()) {
 			item = { label: instruction.mem, kind: CompletionItemKind.Text, data: instruction.line };
@@ -212,5 +256,4 @@ export function updateCompletionItems(code: Code) {
 			}
 		}
 	}
-	// console.log(completionItems);
 }

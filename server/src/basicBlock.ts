@@ -1,12 +1,11 @@
 export enum BBFLAG {
 	none = 0x0,
 	hasExplored = 0x1,
-	hasCheckedDeadCode = 0x2,
-	hasCheckedRestore = 0x4,
-	hasCheckedCC = 0x8,
-	hasChange = 0x10,
-	hasBR = 0x20,
-	hasSetCC = 0x40,
+	hasCheckedBackward = 0x2,
+	hasCheckedForward = 0x4,
+	hasChange = 0x8,
+	hasBR = 0x10,
+	hasSetCC = 0x20,
 }
 
 import {
@@ -14,6 +13,21 @@ import {
 	INSTFLAG,
 	Instruction,
 } from './instruction'
+
+export enum REGFLAG {
+	none = 0x0,
+	S = 0x1,				// Saved
+	R = 0x2,				// Restored
+	SR = 0x3,				// Saved and Restored
+	INPUT = 0x4, 		// Not initialized before used
+}
+
+export enum REGSTAT {
+	none = 0x0,	// Not used
+	W = 0x1,		// Last written
+	R = 0x2,		// Last read
+	RW = 0x3,		// Last read and written
+}
 
 export class BasicBlock {
 	public instructions: Instruction[] = []; 			// Instruction at the same memory address
@@ -23,19 +37,18 @@ export class BasicBlock {
 	public brBlock: BasicBlock | null = null;		  // Branch block pointer
 	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
 	public flags: number = BBFLAG.none;						// Flags - see BBFLAG structure definition
-	public reguse: Array<number>;									// Register use array. 0 for not used, -1 for last access is write, 1 for last access is read
-	// Reguse[8] is CC usage
-	public savedReg: Array<boolean>; 							// Register save array. true for callee-saved, only valid for entry blocks
+	public regstat: Array<REGSTAT>;								// Register use array. The 9th element is for CC.
+	public regflag: Array<REGFLAG>;								// Register flag array.
 	public savedRegMem: Array<string>; 						// Register save information: which memory location is saved to
-	public restoredReg: Array<boolean>; 					// Register restore array. true for callee-saved, only valid for entry and exit blocks
 	public cc: CC = CC.none; 											// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
 	public initialCC: CC = CC.none; 							// Initial CC, 1 means the CC is possible to appear in the condition code
 
 	constructor() {
-		this.reguse = [0, 0, 0, 0, 0, 0, 0, 0, 0];  // Added one extra slot for cc
-		this.savedReg = [false, false, false, false, false, false, false, false];
+		this.regstat = [REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none,
+		REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none];  // Added one extra slot for cc
+		this.regflag = [REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none,
+		REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none];
 		this.savedRegMem = ["", "", "", "", "", "", "", ""];
-		this.restoredReg = [false, false, false, false, false, false, false, false];
 	}
 
 	// Push an instruction into the basic block
@@ -47,109 +60,108 @@ export class BasicBlock {
 	}
 
 	// Check for dead code in this block
-	public checkDeadCode(): Array<number> {
-		let idx: number, i: number;
-		let instruction: Instruction;
-		let reguse1 = null;
-		let reguse2 = null;
+	public analyzeBackward(bb: BasicBlock): Array<REGSTAT> {
+		let regstat1 = null;
+		let regstat2 = null;
 
-		if (this.flags & BBFLAG.hasCheckedDeadCode) {
-			return this.reguse;
+		if (this.flags & BBFLAG.hasCheckedBackward) {
+			return this.regstat;
 		}
-		this.flags |= BBFLAG.hasCheckedDeadCode;
+		this.flags |= BBFLAG.hasCheckedBackward;
 
-		// Get reguse from next blocks
+		// Get regstat from next blocks, merge them
 		if (this.nextBlock) {
-			reguse1 = this.nextBlock.checkDeadCode();
+			regstat1 = this.nextBlock.analyzeBackward(bb);
+			for (let i = 0; i < 8; i++) {
+				this.regstat[i] |= regstat1[i];
+			}
 		}
 		if (this.brBlock) {
-			reguse2 = this.brBlock.checkDeadCode();
+			// On backward branches, don't make any assumptions
+			if (this.brBlock.flags & BBFLAG.hasCheckedBackward) {
+				regstat2 = [REGSTAT.RW, REGSTAT.RW, REGSTAT.RW, REGSTAT.RW,
+				REGSTAT.RW, REGSTAT.RW, REGSTAT.RW, REGSTAT.RW, REGSTAT.RW,];
+			} else {
+				regstat2 = this.brBlock.analyzeBackward(bb);
+			}
+			for (let i = 0; i < 8; i++) {
+				this.regstat[i] |= regstat2[i];
+			}
 		}
 
-		// Merge reguse
-		if (reguse1 && reguse2) {
-			for (i = 0; i < 8; i++) {
-				this.reguse[i] = Math.max(reguse1[i], reguse2[i]);
-			}
-		} else if (reguse1) {
-			for (i = 0; i < 8; i++) {
-				this.reguse[i] = reguse1[i];
-			}
-		}
+		this.analyzeInstructionsBackward(bb);
+		return this.regstat;
+	}
+
+	private analyzeInstructionsBackward(bb: BasicBlock){
+		let instruction: Instruction;
 
 		// Iterate backward
-		for (idx = this.instructions.length - 1; idx >= 0; idx--) {
+		for (let idx = this.instructions.length - 1; idx >= 0; idx--) {
 			instruction = this.instructions[idx];
-			if (!isNaN(instruction.dest) &&
-				this.reguse[instruction.dest] == -1 &&
-				this.reguse[8] == -1) {
+			instruction.flags &= ~INSTFLAG.isDead;
+
+			// Dead code (JSR is never dead)
+			if (instruction.optype != "JSR" && !isNaN(instruction.dest) &&
+				this.regstat[instruction.dest] == REGSTAT.W &&
+				(!instruction.setCC() || this.regstat[8] == REGSTAT.W)) {
 				instruction.flags |= INSTFLAG.isDead;
 				continue;
 			}
-			// Mark reguse accordingly
+
+			// Mark regstat accordingly
 			if (!isNaN(instruction.dest)) {
-				this.reguse[instruction.dest] = -1;
+				this.regstat[instruction.dest] = REGSTAT.W;
 			}
 			if (!isNaN(instruction.src)) {
-				this.reguse[instruction.src] = 1;
+				this.regstat[instruction.src] = REGSTAT.R;
 			}
 			if (!isNaN(instruction.src2)) {
-				this.reguse[instruction.src2] = 1;
+				this.regstat[instruction.src2] = REGSTAT.R;
 			}
+			
 			// Special cases
 			if (instruction.optype == "BR") {
-				this.reguse[8] = 1;
+				this.regstat[8] = REGSTAT.R;
 			} else if (instruction.optype == "JSR") {
-				// Assume nothing for JSR for now. 
-				// TODO: analyze inputs and change this
-				for (i = 0; i < 8; i++) {
-					this.reguse[i] = 1;
+				// TODO: only mark registers JSR touched
+				for (let i = 0; i < 8; i++) {
+					this.regstat[i] = REGSTAT.R;
 				}
 			} else if (instruction.setCC()) {
-				this.reguse[8] = -1;
+				this.regstat[8] = REGSTAT.W;
 			}
 		}
-		return this.reguse;
-	}
 
-	// Check for restored register in this block
-	public checkRestoredReg(bb: BasicBlock) {
-		let idx: number;
-		let instruction: Instruction;
-
-		if (this.flags & BBFLAG.hasCheckedRestore) {
-			return this.restoredReg;
-		}
-		this.flags |= BBFLAG.hasCheckedRestore;
-
-		// DFS
-		if (this.nextBlock) {
-			this.nextBlock.checkRestoredReg(bb);
-		}
-		if (this.brBlock) {
-			this.brBlock.checkRestoredReg(bb);
-		}
-
-		// The last block (return block)
+		// Set restore flags in the last block (return block)
 		if (this.isRETBlock()) {
 			// Link block with entry block
-			bb.exitBlock.push(this);
+			let i: number;
+			for (i = 0; i < bb.exitBlock.length; i++) {
+				if (bb.exitBlock[i] == this) {
+					break;
+				}
+			}
+			if (i == bb.exitBlock.length) {
+				bb.exitBlock.push(this);
+			}
+			
 			// Skip the last operation (should be a RET)
-			for (idx = this.instructions.length - 2; idx >= 0; idx--) {
+			for (let idx = this.instructions.length - 2; idx >= 0; idx--) {
 				instruction = this.instructions[idx];
 				// Not a load operation, give up
 				if (instruction.optype != "LD") {
 					break;
 				}
-				// Record saved registers
-				this.restoredReg[instruction.dest] = true;
+				// Record restored registers
+				this.regflag[instruction.dest] |= REGFLAG.R;
+				this.savedRegMem[instruction.dest] = instruction.mem;
 			}
 		}
 	}
 
 	// Check CC possibility in this block
-	public checkCC(preCC: number): number {
-		let idx: number;
+	public analyzeForward(preCC: number): number {
 		let instruction: Instruction;
 
 		// If initial CC didn't change, return immediately
@@ -162,8 +174,8 @@ export class BasicBlock {
 
 		// Iterate through instructions
 		this.cc = this.initialCC;
-		for (idx = 0; idx < this.instructions.length; idx++) {
-			instruction = this.instructions[idx];
+		for (let i = 0; i < this.instructions.length; i++) {
+			instruction = this.instructions[i];
 			// Reset CC possiblity
 			if (instruction.setCC()) {
 				this.cc = CC.nzp;
@@ -190,15 +202,15 @@ export class BasicBlock {
 			// Next block
 			if (this.nextBlock) {
 				let mask: CC = this.flags & BBFLAG.hasSetCC ? CC.nzp : this.initialCC;
-				this.flags |= this.nextBlock.checkCC(~this.cc & mask) & BBFLAG.hasChange;
+				this.flags |= this.nextBlock.analyzeForward(~this.cc & mask) & BBFLAG.hasChange;
 			}
 			// BR block
 			if (this.brBlock) {
-				this.flags |= this.brBlock.checkCC(this.cc) & BBFLAG.hasChange;
+				this.flags |= this.brBlock.analyzeForward(this.cc) & BBFLAG.hasChange;
 			}
 		} else if (this.nextBlock) {
 			// Only check for next block
-			this.flags |= this.nextBlock.checkCC(this.cc) & BBFLAG.hasChange;
+			this.flags |= this.nextBlock.analyzeForward(this.cc) & BBFLAG.hasChange;
 		}
 
 		return this.flags & BBFLAG.hasChange;

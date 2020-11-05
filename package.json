@@ -1,8 +1,9 @@
 {
-	"name": "lc3support",
-	"description": "LC3 support, including code highlight, autocompletion and static checking",
+	"name": "vscode-lc3",
+	"displayName": "LC3",
+	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "0.0.10",
+	"version": "1.0.0",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",
@@ -39,32 +40,32 @@
 			}
 		],
 		"configuration": {
+			"title": "LC3",
 			"type": "object",
-			"title": "lc3LanguageServer",
 			"properties": {
-				"lc3LanguageServer.showWarnings": {
+				"LC3.showErrors": {
 					"scope": "resource",
 					"type": "boolean",
 					"default": true,
-					"description": "Controls whether to show warnings."
+					"description": "Controls whether to show all errors."
 				},
-				"lc3LanguageServer.showErrors": {
+				"LC3.showWarnings": {
 					"scope": "resource",
 					"type": "boolean",
 					"default": true,
-					"description": "Controls whether to show errors."
+					"description": "Controls whether to show all warnings."
 				},
-				"lc3LanguageServer.showMultipleLabels": {
-					"scope": "resource",
-					"type": "boolean",
-					"default": true,
-					"description": "Controls whether to generate warning when there are multiple labels at the same location."
-				},
-				"lc3LanguageServer.showIncompleteInstructions": {
+				"LC3.showIllegalInstructions": {
 					"scope": "resource",
 					"type": "boolean",
 					"default": false,
 					"description": "Controls whether to generate error message when an illegal instruction is present."
+				},
+				"LC3.enableSubroutineCheckings": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Enables subroutine analysis for calling interfaces, saved registers etc."
 				}
 			}
 		}

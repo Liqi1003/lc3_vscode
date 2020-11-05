@@ -12,7 +12,7 @@ import {
   CodeActionParams,
   CodeAction,
   CodeActionKind,
-  DiagnosticSeverity
+  DiagnosticSeverity,
 } from 'vscode-languageserver';
 
 import {
@@ -21,15 +21,18 @@ import {
 
 import {
   generateDiagnostics,
-  MESSAGE_POSSIBLE_SUBROUTINE
+  MESSAGE_POSSIBLE_SUBROUTINE,
 } from './diagnostic';
 
 import {
   OPNUM,
   completionItems,
-  updateCompletionItems
+  updateCompletionItems,
 } from './completion'
-import { Code } from "./code";
+
+import {
+  Code,
+} from "./code";
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -94,8 +97,8 @@ connection.onInitialized(() => {
 export interface ExtensionSettings {
   showWarnings: boolean;
   showErrors: boolean;
-  showMultipleLabels: boolean;
-  showIncompleteInstructions: boolean;
+  showIllegalInstructions: boolean;
+  enableSubroutineCheckings: boolean;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
@@ -104,8 +107,8 @@ export interface ExtensionSettings {
 const defaultSettings: ExtensionSettings = {
   showWarnings: true,
   showErrors: true,
-  showMultipleLabels: true,
-  showIncompleteInstructions: false
+  showIllegalInstructions: false,
+  enableSubroutineCheckings: true,
 };
 let globalSettings: ExtensionSettings = defaultSettings;
 
@@ -118,7 +121,7 @@ connection.onDidChangeConfiguration(change => {
     documentSettings.clear();
   } else {
     globalSettings = <ExtensionSettings>(
-      (change.settings.lc3LanguageServer || defaultSettings)
+      (change.settings.LC3 || defaultSettings)
     );
   }
 
@@ -138,7 +141,7 @@ export function getDocumentSettings(resource: string): Thenable<ExtensionSetting
   if (!result) {
     result = connection.workspace.getConfiguration({
       scopeUri: resource,
-      section: 'lc3LanguageServer'
+      section: 'LC3'
     });
     documentSettings.set(resource, result);
   }
@@ -153,6 +156,8 @@ documents.onDidClose(e => {
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
+  // URI have more info?
+  // change.document.uri
   const code = new Code(change.document.getText());
   validateTextDocument(change.document, code);
   updateCompletionItems(code);

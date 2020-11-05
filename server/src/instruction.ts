@@ -61,18 +61,19 @@ export class Instruction {
   public redundantCC: CC = CC.none;                    // Only valid for BR instructions, indicate which CC is redundant
 
   constructor(inst: string) {
-    // Default values
+    // Set default values
     this.rawString = inst;
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
-    let i: number;
+
     // Remove unwanted parts
-    for (i = instlst.length; i > 0; i--) {
+    for (let i = instlst.length; i > 0; i--) {
       if (instlst[i] == '' || instlst[i] == ' ' || instlst[i] == '\t' || instlst[i] == ',') {
         instlst.splice(i, 1);
       }
     }
+
     // Assign values to variables
     this.optype = instlst[0];
     switch (this.optype) {
@@ -111,6 +112,7 @@ export class Instruction {
 
       case "JSR":
         if (instlst.length >= 2) {
+          this.dest = 7;
           this.mem = instlst[1];
         } else {
           this.flags |= INSTFLAG.isIncomplete;
@@ -119,7 +121,7 @@ export class Instruction {
 
       case "JSRR":
         if (instlst.length >= 2) {
-          this.dest = this.parseValue(instlst[1]);
+          this.src = this.parseValue(instlst[1]);
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
@@ -331,7 +333,7 @@ export class Instruction {
     // Remove ; in instructions, indicate there is a semicolon
     // This is to accomodate for the lc3as behavior, may not compatiable with v3
     if (this.mem) {
-      for (i = 0; i < this.mem.length; i++) {
+      for (let i = 0; i < this.mem.length; i++) {
         if (this.mem[i] == ';') {
           this.mem = this.mem.slice(0, i);
           this.flags |= INSTFLAG.hasSemicolon;
