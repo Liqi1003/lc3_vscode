@@ -62,7 +62,7 @@ export class Code {
       // Preprocess the line, removing spaces and comments
       line = line.trim();
       for (let i = 0; i < line.length; i++) {
-        if (line[0] == ';' || (line[i] == ';' && (line[i - 1] == ' ' || line[i - 1] == '\t'))) {
+        if (line[i] == ';') {
           line = line.slice(0, i);
           break;
         }

@@ -231,12 +231,6 @@ function checkLabels(diagnosticInfo: DiagnosticInfo, code: Code) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Multiple label at the same memory location.", label.line,
 				"Label " + label.name + " and " + code.labels[idx + 1].name + " are at the same memory location.");
 		}
-		// Check for ; in labels
-		if (label.flags & INSTFLAG.hasSemicolon) {
-			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Label name contains semicolon.", label.line,
-				"Semicolon(;) is not recognized as part of the label name. However, if you use the label name with trailing semicolon in other instructions, \
-		then the assembler will not be able to find it.");
-		}
 		// Check for duplicated labels
 		for (let i = idx + 1; i < code.labels.length; i++) {
 			label2 = code.labels[i];
@@ -386,11 +380,11 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 				if (bb.savedRegMem[i] == "") {
 					// Not saved
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-						ret.line, "R" + i + " is not saved, but restored from " + exit.savedRegMem[i]);
+						ret.line, "R" + i + " is not saved in the beginning of the subroutine, but restored from " + exit.savedRegMem[i]);
 				} else if (exit.savedRegMem[i] == "") {
 					// Not restored
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but not restored.");
+						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but not restored at the end of the subroutine.");
 				} else {
 					// Restoring from a different memory location
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",

@@ -29,10 +29,9 @@ export enum INSTFLAG {
   isSubroutineStart = 0x2,
   isFound = 0x4,
   isDead = 0x8,
-  hasSemicolon = 0x10,
-  isAlwaysBR = 0x20,
-  isNeverBR = 0x40,
-  hasRedundantCC = 0x80,
+  isAlwaysBR = 0x10,
+  isNeverBR = 0x20,
+  hasRedundantCC = 0x40,
 }
 
 export class Instruction {
@@ -328,17 +327,6 @@ export class Instruction {
         // Handle the case like LABEL.BLKW #1
         this.mem = instlst[0].split('.')[0];
         break;
-    }
-
-    // Remove ; in instructions, indicate there is a semicolon
-    // This is to accomodate for the lc3as behavior, may not compatiable with v3
-    if (this.mem) {
-      for (let i = 0; i < this.mem.length; i++) {
-        if (this.mem[i] == ';') {
-          this.mem = this.mem.slice(0, i);
-          this.flags |= INSTFLAG.hasSemicolon;
-        }
-      }
     }
   }
 
