@@ -15,7 +15,6 @@ import {
 	generateDiagnostics
 } from "../src/diagnostic";
 
-
 function outputDiagnostics(diagnostics: Diagnostic[]) {
 	let diag: Diagnostic;
 	let i: number;

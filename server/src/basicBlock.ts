@@ -93,7 +93,7 @@ export class BasicBlock {
 		return this.regstat;
 	}
 
-	private analyzeInstructionsBackward(bb: BasicBlock){
+	private analyzeInstructionsBackward(bb: BasicBlock) {
 		let instruction: Instruction;
 
 		// Iterate backward
@@ -119,7 +119,7 @@ export class BasicBlock {
 			if (!isNaN(instruction.src2)) {
 				this.regstat[instruction.src2] = REGSTAT.R;
 			}
-			
+
 			// Special cases
 			if (instruction.optype == "BR") {
 				this.regstat[8] = REGSTAT.R;
@@ -145,7 +145,7 @@ export class BasicBlock {
 			if (i == bb.exitBlock.length) {
 				bb.exitBlock.push(this);
 			}
-			
+
 			// Skip the last operation (should be a RET)
 			for (let idx = this.instructions.length - 2; idx >= 0; idx--) {
 				instruction = this.instructions[idx];
