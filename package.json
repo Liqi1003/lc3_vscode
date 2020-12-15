@@ -3,7 +3,7 @@
 	"displayName": "LC3",
 	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",

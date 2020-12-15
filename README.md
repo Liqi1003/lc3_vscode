@@ -10,6 +10,8 @@ It is developed based on **Patt And Patel Introduction To Computing Systems 2nd 
 
 Note that if you are using another edition of the book, or you are using a different textbook, then you may see some false positive warnings.
 
+For issues and bug reports, please contact qili8@illinois.edu
+
 ***
 
 <font color=#1E90FF size=5 >
