@@ -96,7 +96,7 @@ export class Code {
 
     // Mark the first instruction
     if (isNaN(this.startAddr)) {
-      this.firstInstrIdx = 0;
+      this.firstInstrIdx = NaN;
     } else {
       for (let i = 0; i < this.instructions.length; i++) {
         instruction = this.instructions[i];
@@ -306,7 +306,7 @@ export class Code {
   private analyzeCode() {
     let instruction: Instruction;
     // Analyze main code
-    if (this.instructions.length > 0) {
+    if (this.instructions.length > 0 && !isNaN(this.firstInstrIdx)) {
       this.iterateCode(this.instructions[this.firstInstrIdx], this.startAddr);
     }
 
@@ -400,6 +400,10 @@ export class Code {
     let instruction: Instruction;
 
     // Explore the main routine
+    if(isNaN(this.firstInstrIdx)){
+      return;
+    }
+    
     bb = this.buildOneBlock(this.instructions[this.firstInstrIdx], this.startAddr);
     this.basicBlocks.push(bb);
 
