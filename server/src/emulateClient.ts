@@ -75,7 +75,7 @@ function printDiagnostic(input: string, out: string) {
 			ws.write("}");
 
 			if (i != diagnostics.length - 1) {
-				ws.write(",\n");
+				ws.write(",");
 			}
 		}
 		ws.write("],");
@@ -100,7 +100,9 @@ readdir(dir, (err, files) => {
 	// console.log(files);
 
 	files.forEach(file => {
-		printDiagnostic("../studentcode/" + file, "../out/" + file + ".json");
+		if (file.split(".")[1] == "asm") {
+			printDiagnostic("../studentcode/" + file, "../out/" + file.split(".")[0] + ".json");
+		}
 	});
 
 });

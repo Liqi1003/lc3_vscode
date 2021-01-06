@@ -208,7 +208,7 @@ function checkORIGandEND(diagnosticInfo: DiagnosticInfo, code: Code) {
 		if (isNaN(label.memAddr)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Code before .ORIG directive.", label.line,
 				"Label before .ORIG is not allowed. Are you missing the .ORIG directive?");
-		} else if (label.memAddr >= code.endAddr) {
+		} else if (label.memAddr > code.endAddr) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Code after .END directive.", label.line,
 				"Label after .END will be ignored.");
 		}

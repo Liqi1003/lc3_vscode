@@ -475,11 +475,11 @@ export class Label {
   }
 }
 
-// Returns true if the input string is a lc3 number: x1234, 0010, #123
+// Returns true if the input string is a lc3 number: x1234, 0010, #-123
 export function isLc3Num(str: string): boolean {
-  const regx = /^x[0-9a-f]+$/i;
+  const regx = /^x-?[0-9a-f]+$/i;
   const regb = /^[0-1]+$/;
-  const regd = /^#[0-9]+$/;
+  const regd = /^#-?[0-9]+$/;
   return (str.match(regx) != null || str.match(regd) != null || str.match(regb) != null);
 }
 
