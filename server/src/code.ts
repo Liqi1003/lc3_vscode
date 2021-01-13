@@ -28,7 +28,7 @@ export class Code {
     this.buildInstructions(text);
     this.linkLabels();
     // Forward-backword analyzation (up to 3 times)
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       this.resetStatus();
       this.analyzeCFG();
       this.markSubroutines(text);

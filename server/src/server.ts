@@ -13,6 +13,8 @@ import {
   CodeAction,
   CodeActionKind,
   DiagnosticSeverity,
+  DeclarationParams,
+  Location,
 } from 'vscode-languageserver';
 
 import {
@@ -28,11 +30,15 @@ import {
   OPNUM,
   completionItems,
   updateCompletionItems,
-} from './completion'
+} from './completion';
+
+import {
+  Label,
+} from './instruction'
 
 import {
   Code,
-} from "./code";
+} from './code';
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -69,7 +75,8 @@ connection.onInitialize((params: InitializeParams) => {
       completionProvider: {
         resolveProvider: true
       },
-      codeActionProvider: true
+      codeActionProvider: true,
+      definitionProvider: true
     }
   };
   if (hasWorkspaceFolderCapability) {
@@ -153,6 +160,8 @@ documents.onDidClose(e => {
   documentSettings.delete(e.document.uri);
 });
 
+let LabelList: Label[];
+
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
@@ -161,6 +170,7 @@ documents.onDidChangeContent(change => {
   const code = new Code(change.document.getText());
   validateTextDocument(change.document, code);
   updateCompletionItems(code);
+  LabelList = code.labels;
 });
 
 // Simplify the interface
@@ -187,7 +197,6 @@ export async function validateTextDocument(textDocument: TextDocument, code: Cod
 }
 
 connection.onCodeAction(provideCodeActions);
-
 export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
   // Check if document was correctly returned
   const document = documents.get(parms.textDocument.uri);
@@ -225,83 +234,110 @@ export function provideCodeActions(parms: CodeActionParams): CodeAction[] {
 }
 
 // Returns the completion list for the request
-connection.onCompletion(
-  (_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
-    completionItems.forEach(item => {
-      // Remove item on the current line
-      if (item.data === _textDocumentPosition.position.line) {
-        completionItems.splice(completionItems.indexOf(item), 1);
-      }
-    });
-    return completionItems;
-  }
-);
+connection.onCompletion(provideCompletion);
+export function provideCompletion(textDocumentPosition: TextDocumentPositionParams): CompletionItem[] {
+  completionItems.forEach(item => {
+    // Remove item on the current line
+    if (item.data === textDocumentPosition.position.line) {
+      completionItems.splice(completionItems.indexOf(item), 1);
+    }
+  });
+  return completionItems;
+}
 
 // This handler resolves additional information for the item selected in
 // the completion list.
-connection.onCompletionResolve(
-  (item: CompletionItem): CompletionItem => {
-    if (item.data === OPNUM.ADD) {
-      item.detail = 'Addition';
-      item.documentation = 'Usage:\nADD DR, SR1, SR2\nADD DR, SR1, imm5';
-    } else if (item.data === OPNUM.AND) {
-      item.detail = 'Bit-wise logical AND';
-      item.documentation = 'Usage:\nAND DR, SR1, SR2\nAND DR, SR1, imm5';
-    } else if (item.data === OPNUM.BR) {
-      item.detail = 'Conditional branch';
-      item.documentation = 'Usage:\nBR(nzp) LABEL';
-    } else if (item.data === OPNUM.JMP) {
-      item.detail = 'Jump';
-      item.documentation = 'Usage:\nJMP BaseR';
-    } else if (item.data === OPNUM.JSR) {
-      item.detail = 'Jump to Subroutine';
-      item.documentation = 'Usage:\nJSR LABEL';
-    } else if (item.data === OPNUM.LD) {
-      item.detail = 'Load';
-      item.documentation = 'Usage:\nLD DR, LABEL';
-    } else if (item.data === OPNUM.LDI) {
-      item.detail = 'Load indirect';
-      item.documentation = 'Usage:\nLDI DR, LABEL';
-    } else if (item.data === OPNUM.LDR) {
-      item.detail = 'Load base+offset';
-      item.documentation = 'Usage:\nLDR DR, BaseR, offset6';
-    } else if (item.data === OPNUM.LEA) {
-      item.detail = 'Load effective address';
-      item.documentation = 'Usage:\nLEA LABEL';
-    } else if (item.data === OPNUM.NOT) {
-      item.detail = 'Bit-wise complement';
-      item.documentation = 'Usage:\nNOT DR, SR';
-    } else if (item.data === OPNUM.RET) {
-      item.detail = 'Return from subroutine';
-      item.documentation = 'Usage:\nRET';
-    } else if (item.data === OPNUM.ST) {
-      item.detail = 'Store';
-      item.documentation = 'Usage:\nST SR, LABEL';
-    } else if (item.data === OPNUM.STI) {
-      item.detail = 'Store indirect';
-      item.documentation = 'Usage:\nSTI SR, LABEL';
-    } else if (item.data === OPNUM.STR) {
-      item.detail = 'Store base+offset';
-      item.documentation = 'Usage:\nSTR BaseR offset6';
-    } else if (item.data === OPNUM.TRAP) {
-      item.detail = 'System call';
-      item.documentation = 'Usage:\nTRAP trapvector8';
-    } else if (item.data === OPNUM.ORIG) {
-      item.detail = 'Starting point of program';
-      item.documentation = 'Example:\n.ORIG 0x3000';
-    } else if (item.data === OPNUM.FILL) {
-      item.detail = 'Fill with data';
-      item.documentation = 'Example:\n.FILL 0x0';
-    } else if (item.data === OPNUM.BLKW) {
-      item.detail = 'Block of word';
-      item.documentation = 'Example:\n.BLKW 10';
-    } else if (item.data === OPNUM.STRINGZ) {
-      item.detail = 'String';
-      item.documentation = 'Example:\n.STRINGZ \'string example\'';
-    }
-    return item;
+connection.onCompletionResolve(provideCompletionResolve);
+export function provideCompletionResolve(item: CompletionItem): CompletionItem {
+  if (item.data === OPNUM.ADD) {
+    item.detail = 'Addition';
+    item.documentation = 'Usage:\nADD DR, SR1, SR2\nADD DR, SR1, imm5';
+  } else if (item.data === OPNUM.AND) {
+    item.detail = 'Bit-wise logical AND';
+    item.documentation = 'Usage:\nAND DR, SR1, SR2\nAND DR, SR1, imm5';
+  } else if (item.data === OPNUM.BR) {
+    item.detail = 'Conditional branch';
+    item.documentation = 'Usage:\nBR(nzp) LABEL';
+  } else if (item.data === OPNUM.JMP) {
+    item.detail = 'Jump';
+    item.documentation = 'Usage:\nJMP BaseR';
+  } else if (item.data === OPNUM.JSR) {
+    item.detail = 'Jump to Subroutine';
+    item.documentation = 'Usage:\nJSR LABEL';
+  } else if (item.data === OPNUM.LD) {
+    item.detail = 'Load';
+    item.documentation = 'Usage:\nLD DR, LABEL';
+  } else if (item.data === OPNUM.LDI) {
+    item.detail = 'Load indirect';
+    item.documentation = 'Usage:\nLDI DR, LABEL';
+  } else if (item.data === OPNUM.LDR) {
+    item.detail = 'Load base+offset';
+    item.documentation = 'Usage:\nLDR DR, BaseR, offset6';
+  } else if (item.data === OPNUM.LEA) {
+    item.detail = 'Load effective address';
+    item.documentation = 'Usage:\nLEA LABEL';
+  } else if (item.data === OPNUM.NOT) {
+    item.detail = 'Bit-wise complement';
+    item.documentation = 'Usage:\nNOT DR, SR';
+  } else if (item.data === OPNUM.RET) {
+    item.detail = 'Return from subroutine';
+    item.documentation = 'Usage:\nRET';
+  } else if (item.data === OPNUM.ST) {
+    item.detail = 'Store';
+    item.documentation = 'Usage:\nST SR, LABEL';
+  } else if (item.data === OPNUM.STI) {
+    item.detail = 'Store indirect';
+    item.documentation = 'Usage:\nSTI SR, LABEL';
+  } else if (item.data === OPNUM.STR) {
+    item.detail = 'Store base+offset';
+    item.documentation = 'Usage:\nSTR BaseR offset6';
+  } else if (item.data === OPNUM.TRAP) {
+    item.detail = 'System call';
+    item.documentation = 'Usage:\nTRAP trapvector8';
+  } else if (item.data === OPNUM.ORIG) {
+    item.detail = 'Starting point of program';
+    item.documentation = 'Example:\n.ORIG 0x3000';
+  } else if (item.data === OPNUM.FILL) {
+    item.detail = 'Fill with data';
+    item.documentation = 'Example:\n.FILL 0x0';
+  } else if (item.data === OPNUM.BLKW) {
+    item.detail = 'Block of word';
+    item.documentation = 'Example:\n.BLKW 10';
+  } else if (item.data === OPNUM.STRINGZ) {
+    item.detail = 'String';
+    item.documentation = 'Example:\n.STRINGZ \'string example\'';
   }
-);
+  return item;
+}
+
+connection.onDefinition(provideDefinition);
+export function provideDefinition(params: DeclarationParams): Location | undefined {
+  let doc = documents.get(params.textDocument.uri);
+  if (doc == undefined) {
+    return undefined;
+  }
+  let docstr: string = doc.getText();
+  // Get the start and end point of current label
+  let offset: number = doc.offsetAt(params.position);
+  let start: number = offset, end: number = offset;
+  while (start > 0 && isAlphaNumeric(docstr[start - 1])) {
+    start--;
+  }
+  while (isAlphaNumeric(docstr[end])) {
+    end++;
+  }
+  let name: string = docstr.substring(start, end);
+  for (let idx = 0; idx < LabelList.length; idx++) {
+    let label: Label = LabelList[idx];
+    if (name == label.name) {
+      return { uri: params.textDocument.uri, range: { start: { line: label.line, character: 0 }, end: { line: label.line + 1, character: 0 } } };
+    }
+  }
+}
+
+function isAlphaNumeric(ch: string) {
+  return ch.match(/\w/);
+}
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events

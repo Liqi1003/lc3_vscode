@@ -120,6 +120,12 @@ All labels in the file can be autocompleted using VScode's tab completion.
 
 Also, you can see the example usage of different opcodes if you type it and see "related information".
 
+<font color=#6495ED size=4 >
+Goto Definition
+</font><br>
+
+You can quickly navigate to the definition of a label by ctrl+left click on the usage of a label.
+
 ***
 
 <font color=#1E90FF size=5 >

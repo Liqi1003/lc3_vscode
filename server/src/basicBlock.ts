@@ -37,18 +37,20 @@ export class BasicBlock {
 	public brBlock: BasicBlock | null = null;		  // Branch block pointer
 	public exitBlock: BasicBlock[] = [];  				// Exit blocks of a subroutine, only valid for subroutine start blocks
 	public flags: number = BBFLAG.none;						// Flags - see BBFLAG structure definition
-	public regstat: Array<REGSTAT>;								// Register use array. The 9th element is for CC.
-	public regflag: Array<REGFLAG>;								// Register flag array.
-	public savedRegMem: Array<string>; 						// Register save information: which memory location is saved to
+	public registers: Registers = new Registers;	// Registers
+	// public regstat: Array<REGSTAT>;								// Register use array. The 9th element is for CC.
+	// public regflag: Array<REGFLAG>;								// Register flag array.
+	// public savedRegMem: Array<string>; 						// Register save information: which memory location is saved to
 	public cc: CC = CC.none; 											// CC, see CC definition in instruction.ts. 1 means the CC is possible to appear in the condition code
 	public initialCC: CC = CC.none; 							// Initial CC, 1 means the CC is possible to appear in the condition code
 
 	constructor() {
-		this.regstat = [REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none,
-		REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none];  // Added one extra slot for cc
-		this.regflag = [REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none,
-		REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none];
-		this.savedRegMem = ["", "", "", "", "", "", "", ""];
+		// this.regstat = [REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none,
+		// REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none, REGSTAT.none];  // Added one extra slot for cc
+		// this.regflag = [REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none,
+		// REGFLAG.none, REGFLAG.none, REGFLAG.none, REGFLAG.none];
+		// this.savedRegMem = ["", "", "", "", "", "", "", ""];
+		// Allocate 8 registers
 	}
 
 	// Push an instruction into the basic block
@@ -65,7 +67,7 @@ export class BasicBlock {
 		let regstat2 = null;
 
 		if (this.flags & BBFLAG.hasCheckedBackward) {
-			return this.regstat;
+			return this.registers.getStats();
 		}
 		this.flags |= BBFLAG.hasCheckedBackward;
 
@@ -73,7 +75,7 @@ export class BasicBlock {
 		if (this.nextBlock) {
 			regstat1 = this.nextBlock.analyzeBackward(bb);
 			for (let i = 0; i < 8; i++) {
-				this.regstat[i] |= regstat1[i];
+				this.registers.regs[i].status |= regstat1[i];
 			}
 		}
 		if (this.brBlock) {
@@ -85,12 +87,12 @@ export class BasicBlock {
 				regstat2 = this.brBlock.analyzeBackward(bb);
 			}
 			for (let i = 0; i < 8; i++) {
-				this.regstat[i] |= regstat2[i];
+				this.registers.regs[i].status |= regstat2[i];
 			}
 		}
 
 		this.analyzeInstructionsBackward(bb);
-		return this.regstat;
+		return this.registers.getStats();
 	}
 
 	private analyzeInstructionsBackward(bb: BasicBlock) {
@@ -103,33 +105,38 @@ export class BasicBlock {
 
 			// Dead code (JSR is never dead)
 			if (instruction.optype != "JSR" && !isNaN(instruction.dest) &&
-				this.regstat[instruction.dest] == REGSTAT.W &&
-				(!instruction.setCC() || this.regstat[8] == REGSTAT.W)) {
+				this.registers.regs[instruction.dest].status == REGSTAT.W &&
+				(!instruction.setCC() || this.registers.regs[8].status == REGSTAT.W)) {
 				instruction.flags |= INSTFLAG.isDead;
 				continue;
 			}
 
 			// Mark regstat accordingly
 			if (!isNaN(instruction.dest)) {
-				this.regstat[instruction.dest] = REGSTAT.W;
+				this.registers.regs[instruction.dest].status = REGSTAT.W;
 			}
 			if (!isNaN(instruction.src)) {
-				this.regstat[instruction.src] = REGSTAT.R;
+				this.registers.regs[instruction.src].status = REGSTAT.R;
 			}
 			if (!isNaN(instruction.src2)) {
-				this.regstat[instruction.src2] = REGSTAT.R;
+				this.registers.regs[instruction.src2].status = REGSTAT.R;
 			}
 
 			// Special cases
 			if (instruction.optype == "BR") {
-				this.regstat[8] = REGSTAT.R;
+				this.registers.regs[8].status = REGSTAT.R;
 			} else if (instruction.optype == "JSR") {
-				// TODO: only mark registers JSR touched
-				for (let i = 0; i < 8; i++) {
-					this.regstat[i] = REGSTAT.R;
+				let jsrBlock = instruction.jsrTarget?.inBlock;
+				// console.log(jsrBlock);
+				let regstat = jsrBlock?.registers.getStats();
+				// console.log(regstat);
+				if (regstat) {
+					for (let i = 0; i < 8; i++) {
+						this.registers.regs[i].status |= regstat[i];
+					}
 				}
 			} else if (instruction.setCC()) {
-				this.regstat[8] = REGSTAT.W;
+				this.registers.regs[8].status = REGSTAT.W;
 			}
 		}
 
@@ -154,8 +161,8 @@ export class BasicBlock {
 					break;
 				}
 				// Record restored registers
-				this.regflag[instruction.dest] |= REGFLAG.R;
-				this.savedRegMem[instruction.dest] = instruction.mem;
+				this.registers.regs[instruction.dest].flag |= REGFLAG.R;
+				this.registers.regs[instruction.dest].savedMem = instruction.mem;
 			}
 		}
 	}
@@ -254,4 +261,47 @@ export class BasicBlock {
 	private isRETBlock(): boolean {
 		return this.instructions[this.instructions.length - 1].optype == "RET";
 	}
+}
+
+class Register {
+	public value: number = NaN;
+	public status: REGSTAT = REGSTAT.none;
+	public flag: REGFLAG = REGFLAG.none;
+	public savedMem: string = "";
+	constructor() { }
+}
+
+class Registers {
+	public regs: Register[] = [];
+
+	constructor() {
+		for (let i = 0; i < 9; i++) {
+			this.regs.push(new Register());
+		}
+	}
+
+	public getStats(): Array<REGSTAT> {
+		let arr: Array<REGSTAT> = [];
+		for (let i = 0; i < 9; i++) {
+			arr.push(this.regs[i].status);
+		}
+		return arr;
+	}
+
+	public getFlags(): Array<REGFLAG> {
+		let arr: Array<REGFLAG> = [];
+		for (let i = 0; i < 9; i++) {
+			arr.push(this.regs[i].flag);
+		}
+		return arr;
+	}
+
+	public getMem(): Array<string> {
+		let arr: Array<string> = [];
+		for (let i = 0; i < 9; i++) {
+			arr.push(this.regs[i].savedMem);
+		}
+		return arr;
+	}
+
 }

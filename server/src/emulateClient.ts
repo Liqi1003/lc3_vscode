@@ -43,10 +43,10 @@ function printDiagnostic(input: string, out: string) {
 	const diagnostics: Diagnostic[] = [];
 
 	rs.on("open", function () {
-		console.log("File opened: ", input);
+		// console.log("File opened: ", input);
 	})
 	ws.on("open", function () {
-		console.log("File opened: ", out);
+		// console.log("File opened: ", out);
 	})
 
 	rs.on("data", (data) => {
@@ -60,9 +60,7 @@ function printDiagnostic(input: string, out: string) {
 		};
 
 		generateDiagnostics(diagnosticInfo, code);
-		if (diagnostics.length > 0) {
-			ws.write('{"diagnostics": [');
-		}
+		ws.write('{"diagnostics": [');
 		for (let i = 0; i < diagnostics.length; i++) {
 			// Record number of warnings and errors
 			if (diagnostics[i].severity == DiagnosticSeverity.Error) err++;

@@ -279,6 +279,9 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	let label: Label;
 	let saved: string, input: string, nouse: string, result: string;
 
+	let flags = bb.registers.getFlags();
+	let status = bb.registers.getStats();
+	let savedMem = bb.registers.getMem();
 	// Scan through the entry block
 	for (let idx = 0; idx < bb.instructions.length; idx++) {
 		instruction = bb.instructions[idx];
@@ -288,13 +291,13 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		}
 
 		// Generate warning according to the save instructions
-		if (bb.regflag[instruction.src] & REGFLAG.S) {
+		if (flags[instruction.src] & REGFLAG.S) {
 			// Saved twice, warning
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Register is saved multiple times",
 				instruction.line, "You are saving R" + instruction.src + " multiple times. Is this a typo?");
 		}
 		for (let i = 0; i < 8; i++) {
-			if (bb.savedRegMem[i] == instruction.mem) {
+			if (savedMem[i] == instruction.mem) {
 				// Saved twice, warning
 				generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "The same memory location is used multiple times",
 					instruction.line, "You are saving multiple values into the same memory location " + instruction.mem + ". Is this a typo?");
@@ -302,23 +305,25 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 		}
 
 		// Record saved registers
-		if (~(bb.regflag[instruction.src] & REGFLAG.S)) {
-			bb.regflag[instruction.src] |= REGFLAG.S;
-			bb.savedRegMem[instruction.src] = instruction.mem;
+		if (~(flags[instruction.src] & REGFLAG.S)) {
+			flags[instruction.src] |= REGFLAG.S;
+			savedMem[instruction.src] = instruction.mem;
 		}
 	}
 
 	// Assume all registers are restored
 	for (let i = 0; i < 8; i++) {
-		bb.regflag[i] |= REGFLAG.R;
+		flags[i] |= REGFLAG.R;
 	}
+
 	// Scan through all exit blocks and get restoration status
 	for (let idx = 0; idx < bb.exitBlock.length; idx++) {
 		exit = bb.exitBlock[idx];
+		let exitflags = exit.registers.getFlags();
 		for (let i = 0; i < 8; i++) {
 			// Not restored
-			if (!(exit.regflag[i] & REGFLAG.R)) {
-				bb.regflag[i] &= ~REGFLAG.R;
+			if (!(exitflags[i] & REGFLAG.R)) {
+				exitflags[i] &= ~REGFLAG.R;
 			}
 		}
 	}
@@ -327,7 +332,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	saved = "";
 	// R7 is always caller-saved
 	for (let i = 0; i < 7; i++) {
-		if (bb.regflag[i] == REGFLAG.SR || bb.regstat[i] == REGSTAT.none) {
+		if (flags[i] == REGFLAG.SR || status[i] == REGSTAT.none) {
 			saved = saved + "R" + i + " ";
 		}
 	}
@@ -338,7 +343,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	// Generate input registers string
 	input = "";
 	for (let i = 0; i < 7; i++) {
-		if (bb.regflag[i] == REGFLAG.INPUT) {
+		if (flags[i] == REGFLAG.INPUT) {
 			input = input + "R" + i + " ";
 		}
 	}
@@ -346,7 +351,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	// Generate not used register string
 	nouse = "";
 	for (let i = 0; i < 7; i++) {
-		if (bb.regstat[i] == REGSTAT.none) {
+		if (status[i] == REGSTAT.none) {
 			nouse = nouse + "R" + i + " ";
 		}
 	}
@@ -373,22 +378,24 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	// Check for each exit block
 	for (let idx = 0; idx < bb.exitBlock.length; idx++) {
 		exit = bb.exitBlock[idx];
+		let exitMem = exit.registers.getMem();
+
 		ret = exit.instructions[exit.instructions.length - 1];
 		// Mismatch in registers
 		for (let i = 0; i < 8; i++) {
-			if (bb.savedRegMem[i] != exit.savedRegMem[i]) {
-				if (bb.savedRegMem[i] == "") {
+			if (savedMem[i] != exitMem[i]) {
+				if (savedMem[i] == "") {
 					// Not saved
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-						ret.line, "R" + i + " is not saved in the beginning of the subroutine, but restored from " + exit.savedRegMem[i]);
-				} else if (exit.savedRegMem[i] == "") {
+						ret.line, "R" + i + " is not saved in the beginning of the subroutine, but restored from " + exitMem[i]);
+				} else if (exitMem[i] == "") {
 					// Not restored
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but not restored at the end of the subroutine.");
+						ret.line, "R" + i + " is saved to " + savedMem[i] + ", but not restored at the end of the subroutine.");
 				} else {
 					// Restoring from a different memory location
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Mismatch in save-restore of registers",
-						ret.line, "R" + i + " is saved to " + bb.savedRegMem[i] + ", but you are restoring it from " + exit.savedRegMem[i]);
+						ret.line, "R" + i + " is saved to " + savedMem[i] + ", but you are restoring it from " + exitMem[i]);
 				}
 			}
 		}

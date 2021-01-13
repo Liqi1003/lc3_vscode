@@ -47,7 +47,10 @@
 					"scope": "resource",
 					"type": "string",
 					"default": "v2",
-					"enum": ["v2", "v3"]
+					"enum": [
+						"v2",
+						"v3"
+					]
 				},
 				"LC3.showErrors": {
 					"scope": "resource",
