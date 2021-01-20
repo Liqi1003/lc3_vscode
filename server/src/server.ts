@@ -102,6 +102,7 @@ connection.onInitialized(() => {
 });
 
 export interface ExtensionSettings {
+  version: string;
   showWarnings: boolean;
   showErrors: boolean;
   showIllegalInstructions: boolean;
@@ -112,6 +113,7 @@ export interface ExtensionSettings {
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
 const defaultSettings: ExtensionSettings = {
+  version: 'v2',
   showWarnings: true,
   showErrors: true,
   showIllegalInstructions: false,

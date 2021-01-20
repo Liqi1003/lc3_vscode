@@ -55,14 +55,19 @@ export class Code {
     let lines = text.split('\n');
     let instruction: Instruction;
     let line: string;
+    let endWithSemicolon: boolean = false;
 
     // Construct each instruction
     for (let idx = 0; idx < lines.length; idx++) {
+      endWithSemicolon = false;
       line = lines[idx];
       // Preprocess the line, removing spaces and comments
       line = line.trim();
       for (let i = 0; i < line.length; i++) {
         if (line[i] == ';') {
+          if (i > 0 && !line[i - 1].match(/\s/)) {
+            endWithSemicolon = true;
+          }
           line = line.slice(0, i);
           break;
         }
@@ -70,6 +75,9 @@ export class Code {
       if (line) {
         // TODO: Might want to rewrite this one
         instruction = new Instruction(line);
+        if(endWithSemicolon) {
+          instruction.flags |= INSTFLAG.endsWithSemicolon;
+        }
         // Handle .STRINGZ in multiple line manner
         if (instruction.optype == ".STRINGZ" && instruction.mem &&
           instruction.mem.split('"').length < 3) {

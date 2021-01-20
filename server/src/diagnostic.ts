@@ -68,6 +68,11 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 	for (let idx = 0; idx < code.instructions.length; idx++) {
 		instruction = code.instructions[idx];
 
+		// Check for validity of FILL
+		if(instruction.optype == ".FILL" && instruction.mem) {
+				checkFill(diagnosticInfo, code, instruction);
+		}
+
 		// Skip the instruction if it is not found
 		if (!(instruction.flags & INSTFLAG.isFound)) {
 			continue;
@@ -89,13 +94,13 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
 			case "ADD":
-				if (instruction.immVal >= 32 || (instruction.immVal >= 16 && instruction.immValType == '#')) {
-					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
+				if (instruction.immVal >= 16 || (instruction.immVal < -16 && instruction.immValType == '#')) {
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "AND":
-				if (instruction.immVal >= 32) {
-					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
+				if (instruction.immVal >= 16 || instruction.immVal < -16) {
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "BR":
@@ -130,8 +135,8 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 				break;
 			case "LDR":
 			case "STR":
-				if (instruction.immVal >= 64) {
-					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, "");
+				if (instruction.immVal >= 32 || instruction.immVal < -32) {
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Immediate value is out of range.", instruction.line, "");
 				}
 				break;
 			case "TRAP":
@@ -154,15 +159,32 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 						"You are executing RET outside of a subroutine. Use \"HALT\" to halt the machine, or \"JMP R7\" if you really meant it.");
 				}
 				break;
-			case ".FILL":
-			case ".STRINGZ":
-				break;
-			case ".BLKW":
-				break;
 			default:
 				break;
 		}
 	}
+}
+
+// Check for whether the data filled is legal (Error/Warning)
+function checkFill(diagnosticInfo: DiagnosticInfo, code: Code, instruction: Instruction) {
+	let i: number;
+	if (isLc3Num(instruction.mem)){
+		return 0;
+	}
+	
+	// Check if offset is within range
+	for (i = 0; i < code.labels.length; i++) {
+		if (code.labels[i].name == instruction.mem) {
+			break;
+		}
+	}
+	// Label not found
+	if (i == code.labels.length) {
+		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Label not defined.", instruction.line,
+			"The label " + instruction.mem + " is not defined.");
+		return -1;
+	}
+	return 0;
 }
 
 // Check for always BR and redundant conditions (Warning)
@@ -225,6 +247,10 @@ function checkLabels(diagnosticInfo: DiagnosticInfo, code: Code) {
 		if (isLc3Num(label.name) || isLc3Reg(label.name)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number/register.", label.line,
 				"This label name will be recognized as a number or register name by the assembler, it will not be usable in any other instructions.");
+		}
+		if (!label.name.match(/^[a-zA-Z_][0-9a-zA-Z_]+$/)) {
+			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Illegal label name.", label.line,
+				"Label name is illegal. e.g. starts with a number or contains special chatacters.");
 		}
 		// Check for multiple labels at the same line
 		if (idx + 1 < code.labels.length && label.memAddr == code.labels[idx + 1].memAddr) {
@@ -438,7 +464,15 @@ function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction,
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Hardcoded PCoffset.", instruction.line,
 			"Hardcoding the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
 		return -2;
-	} else {
+	} 
+	// Check if the label name contains ; at the end
+	else if (diagnosticInfo.settings.version == 'v2' && (instruction.flags & INSTFLAG.endsWithSemicolon)) {
+		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Label name ends with ;.", instruction.line,
+			"The assembler recognizes trailing ; as part of the label in current version. This is a bug of the assembler, but it will cause your code \
+			not able to compile");
+		return -3;
+	} 
+	else {
 		// Check if offset is within range
 		for (i = 0; i < code.labels.length; i++) {
 			if (code.labels[i].name == instruction.mem) {

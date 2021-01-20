@@ -27,9 +27,10 @@ import {
 } from "./code";
 
 const defaultSettings: ExtensionSettings = {
+	version: "v2",
 	showWarnings: true,
 	showErrors: true,
-	showIllegalInstructions: false,
+	showIllegalInstructions: true,
 	enableSubroutineCheckings: true,
 };
 

@@ -32,6 +32,7 @@ export enum INSTFLAG {
   isAlwaysBR = 0x10,
   isNeverBR = 0x20,
   hasRedundantCC = 0x40,
+  endsWithSemicolon = 0x80,
 }
 
 export class Instruction {
@@ -124,7 +125,7 @@ export class Instruction {
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN) {
+        if (isNaN(this.dest)) {
           this.flags |= INSTFLAG.isIncomplete;
         }
         break;
@@ -137,7 +138,7 @@ export class Instruction {
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || isLc3Reg(this.mem)) {
+        if (isNaN(this.dest) || isLc3Reg(this.mem)) {
           this.flags |= INSTFLAG.isIncomplete;
         }
         break;
@@ -151,7 +152,7 @@ export class Instruction {
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || isNaN(this.src) || isNaN(this.immVal)) {
+        if (isNaN(this.dest) || isNaN(this.src) || isNaN(this.immVal)) {
           this.flags |= INSTFLAG.isIncomplete;
         }
         break;
@@ -163,7 +164,7 @@ export class Instruction {
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || isLc3Reg(this.mem)) {
+        if (isNaN(this.dest) || isLc3Reg(this.mem)) {
           this.flags |= INSTFLAG.isIncomplete;
         }
         break;
@@ -175,7 +176,7 @@ export class Instruction {
         } else {
           this.flags |= INSTFLAG.isIncomplete;
         }
-        if (this.dest == NaN || isNaN(this.src)) {
+        if (isNaN(this.dest) || isNaN(this.src)) {
           this.flags |= INSTFLAG.isIncomplete;
         }
         break;
@@ -295,6 +296,9 @@ export class Instruction {
         break;
 
       case ".STRINGZ":
+      case ".STRINGZ\"":
+      case ".STRINGZ\'":
+        this.optype = ".STRINGZ"
         if (instlst.length >= 2) {
           this.mem = inst.slice(".STRINGZ".length).trim();
         } else {
@@ -401,18 +405,27 @@ export class Instruction {
     switch (val[0]) {
       case 'R':
         // Register
-        ret = parseInt(val[1]);
-        if (val.length > 2 || ret > 7) {
+        if (val.length > 2 || !val[1].match(/[0-7]/)) {
           ret = NaN;
+        } else {
+          ret = parseInt(val[1]);
         }
         break;
       case 'X':
         // Hexadecimal
-        ret = parseInt(val.slice(1), 16);
+        if (val[1] == '-') {
+          ret = -parseInt(val.slice(2), 16);
+        } else {
+          ret = parseInt(val.slice(1), 16);
+        }
         break;
       case '#':
         // Decimal
-        ret = parseInt(val.slice(1), 10);
+        if (val[1] == '-') {
+          ret = -parseInt(val.slice(2), 10);
+        } else {
+          ret = parseInt(val.slice(1), 10);
+        }
         break;
       default:
         // Binary
@@ -422,7 +435,7 @@ export class Instruction {
           ret = NaN;
         }
     }
-    if ((ret & 0x8000) > 0) {
+    if (!isNaN(ret) && (ret > 0) && (ret & 0x8000) > 0) {
       ret = ret - 0x10000;
     }
     return ret;

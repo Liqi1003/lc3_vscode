@@ -36,6 +36,8 @@ Illegal instructions
 
 Instructions that are incomplete or illegal will generate errors.
 
+*This checking is turned off by default to provide better coding experience. This feature will be improved in future versions.*
+
 <font color=#6495ED size=3 >
 Immediate values
 </font><br>
@@ -70,7 +72,7 @@ Shared code between different subroutines will be warned.
 Illegal label names, duplicated labels, multiple labels at the same memory locations
 </font><br>
 
-Label names that are not usable, like `X10`, `R3` will be warned.
+Label names that are not usable, like `X10`, `R3`, `12LABEL` will be warned.
 
 Duplicated labels cannot appear in the same file.
 
@@ -132,6 +134,13 @@ You can quickly navigate to the definition of a label by ctrl+left click on the 
 Configurations
 </font><br>
 <br>
+
+<font color=#1E90FF size=4 >
+version
+</font><br>
+
+Version of the LC3 assembler. Currently only v2 are fully supported.
+
 <font color=#1E90FF size=4 >
 showErrors
 </font><br>
@@ -148,7 +157,7 @@ Controls whether to show all warnings.
 showIllegalInstructions
 </font><br>
 
-Controls whether to generate error message when an illegal instruction is present. 
+Controls whether to generate error message when an illegal instruction is present.
 
 *This option is turned off by default to provide better coding experience.*
 
