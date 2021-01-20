@@ -429,11 +429,18 @@ export class Instruction {
         break;
       default:
         // Binary
-        if (isLc3Num(val)) {
+        if (val.match(/[01]+/)) {
           ret = parseInt(val, 2);
+        } else if (val.match(/[0-9]+/)) {
+          if (val[0] == '-') {
+            ret = -parseInt(val.slice(1), 10);
+          } else {
+            ret = parseInt(val, 10);
+          }
         } else {
           ret = NaN;
         }
+        break;
     }
     if (!isNaN(ret) && (ret > 0) && (ret & 0x8000) > 0) {
       ret = ret - 0x10000;
@@ -492,7 +499,7 @@ export class Label {
 export function isLc3Num(str: string): boolean {
   const regx = /^x-?[0-9a-f]+$/i;
   const regb = /^[0-1]+$/;
-  const regd = /^#-?[0-9]+$/;
+  const regd = /^#?-?[0-9]+$/;
   return (str.match(regx) != null || str.match(regd) != null || str.match(regb) != null);
 }
 

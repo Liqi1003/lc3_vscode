@@ -248,7 +248,7 @@ function checkLabels(diagnosticInfo: DiagnosticInfo, code: Code) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [DiagnosticTag.Unnecessary], "Label name is a number/register.", label.line,
 				"This label name will be recognized as a number or register name by the assembler, it will not be usable in any other instructions.");
 		}
-		if (!label.name.match(/^[a-zA-Z_][0-9a-zA-Z_]+$/)) {
+		if (!label.name.match(/^[a-zA-Z_][0-9a-zA-Z_]*$/)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Illegal label name.", label.line,
 				"Label name is illegal. e.g. starts with a number or contains special chatacters.");
 		}
