@@ -157,7 +157,7 @@ export class BasicBlock {
 			for (let idx = this.instructions.length - 2; idx >= 0; idx--) {
 				instruction = this.instructions[idx];
 				// Not a load operation, give up
-				if (instruction.optype != "LD") {
+				if (instruction.optype != "LD" || isNaN(instruction.dest)) {
 					break;
 				}
 				// Record restored registers

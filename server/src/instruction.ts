@@ -9,7 +9,7 @@ export enum TRAPVEC {
   PUTS = 0x22,
   IN = 0x23,
   PUTSP = 0x24,
-  HALT = 0x25
+  HALT = 0x25,
 }
 
 export enum CC {
@@ -33,6 +33,7 @@ export enum INSTFLAG {
   isNeverBR = 0x20,
   hasRedundantCC = 0x40,
   endsWithSemicolon = 0x80,
+  warnedUnrolledLoop = 0x100,
 }
 
 export class Instruction {
@@ -388,9 +389,9 @@ export class Instruction {
       case "LDR":
       case "NOT":
         return true;
-      // LC3v3, lea not set cc
       case "LEA":
       case "TRAP":
+
         return true;
       default:
         return false;

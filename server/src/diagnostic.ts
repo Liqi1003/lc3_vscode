@@ -5,7 +5,6 @@ import {
 } from 'vscode-languageserver';
 
 import {
-	hasDiagnosticRelatedInformationCapability,
 	DiagnosticInfo,
 } from './server';
 
@@ -30,6 +29,14 @@ import {
 	REGSTAT,
 } from "./basicBlock";
 
+enum MATCHPATTERN {
+	NONE = 0x0,
+	IMM_EQDIFF = 0x1,
+	IMM_DOUBLE = 0x2,
+	IMM_HALF = 0x4,
+	MEM_EQDIFF = 0x8,
+}
+
 // For code action
 export const MESSAGE_POSSIBLE_SUBROUTINE = "Label is never used";
 
@@ -52,6 +59,9 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 	// Check for running into data
 	checkRunningIntoData(diagnosticInfo, code);
 
+	// Check for unrolled loop
+	checkUnrolledLoop(diagnosticInfo, code);
+
 	/** Block checking */
 	if (diagnosticInfo.settings.enableSubroutineCheckings) {
 		for (let idx = 0; idx < code.basicBlocks.length; idx++) {
@@ -69,8 +79,8 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 		instruction = code.instructions[idx];
 
 		// Check for validity of FILL
-		if(instruction.optype == ".FILL" && instruction.mem) {
-				checkFill(diagnosticInfo, code, instruction);
+		if (instruction.optype == ".FILL" && instruction.mem) {
+			checkFill(diagnosticInfo, code, instruction);
 		}
 
 		// Skip the instruction if it is not found
@@ -168,10 +178,10 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 // Check for whether the data filled is legal (Error/Warning)
 function checkFill(diagnosticInfo: DiagnosticInfo, code: Code, instruction: Instruction) {
 	let i: number;
-	if (isLc3Num(instruction.mem)){
+	if (isLc3Num(instruction.mem)) {
 		return 0;
 	}
-	
+
 	// Check if offset is within range
 	for (i = 0; i < code.labels.length; i++) {
 		if (code.labels[i].name == instruction.mem) {
@@ -185,6 +195,176 @@ function checkFill(diagnosticInfo: DiagnosticInfo, code: Code, instruction: Inst
 		return -1;
 	}
 	return 0;
+}
+
+// Check for unrolled loops
+function checkUnrolledLoop(diagnosticInfo: DiagnosticInfo, code: Code) {
+	for (let idx = 0; idx < code.instructions.length; idx++) {
+		for (let stride = 3; stride < 50 && stride < code.instructions.length; stride++) {
+			if (idx > code.instructions.length - stride ||
+				code.instructions[idx].isData() ||
+				(code.instructions[idx].flags & INSTFLAG.warnedUnrolledLoop)) {
+				continue;
+			}
+			let insts: Instruction[] = [];
+			for (let i = 0; i < stride; i++) {
+				insts.push(code.instructions[idx + i]);
+			}
+			let repeatedTimes = checkForSimilarInst(insts, idx, code);
+			// Judge whether writing a loop can bring benefit in code length
+			if (repeatedTimes >= 2 && stride * repeatedTimes > stride + 6) {
+				let str = "These " + stride + " instructions are repeated for " + repeatedTimes + " times in a similar way. Consider writing a loop \
+				  or a subroutine instead." + "\n" + "Repeated instructions:\n";
+				for (let i = 0; i < stride; i++) {
+					str += insts[i].rawString + "\n";
+				}
+				generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Unrolled loop.", code.instructions[idx].line, str);
+				for (let i = 1; i < repeatedTimes; i++) {
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Unrolled loop (iteration " + (i + 1) + "/" + repeatedTimes + ").",
+						code.instructions[idx + i * stride].line, "");
+				}
+				for (let i = 0; i < stride * repeatedTimes; i++) {
+					code.instructions[idx + i].flags |= INSTFLAG.warnedUnrolledLoop;
+				}
+				idx += stride * repeatedTimes;
+			}
+		}
+	}
+}
+
+// Walk the whole code for repetitive code with stride = insts.length, starting with the idx th instruction.
+function checkForSimilarInst(insts: Instruction[], idx: number, code: Code): number {
+	const MAX_COUNT = 20; // Analyze at most MAX_COUNT iterations
+	let repeatedTimes = MAX_COUNT;
+	let stride = insts.length;
+	let inst1: Instruction, inst2: Instruction;
+	if (insts.length <= 0) {
+		return -1;
+	}
+
+	for (let i = 0; i < insts.length; i++) {
+		let type: string = insts[i].optype;
+		let endloop: boolean = false;
+		let count: number;
+		let pattern: MATCHPATTERN = MATCHPATTERN.NONE;
+		let diffval: number = NaN;
+		// Analyze at most MAX_COUNT iterations
+		for (count = 1; count <= MAX_COUNT; count++) {
+			if (idx + i + count * stride >= code.instructions.length) {
+				break;
+			}
+			inst1 = code.instructions[idx + i + (count - 1) * stride];
+			inst2 = code.instructions[idx + i + count * stride];
+
+			if (mismatchInInstruction(inst1, inst2)) {
+				endloop = true;
+			}
+			switch (type) {
+				case "ADD":
+				case "AND":
+					// Look for equal difference OR power of 2
+					// Already asserted, skip
+					if (!isNaN(inst1.src2)) {
+						break;
+					}
+					// First time, determine pattern
+					if (pattern == MATCHPATTERN.NONE) {
+						if (inst1.immVal != 0 && inst2.immVal != 0) {
+							let ratio = inst2.immVal / inst1.immVal;
+							if (ratio == 2) {
+								pattern = MATCHPATTERN.IMM_DOUBLE;
+							}
+							if (ratio == 1 / 2) {
+								pattern = MATCHPATTERN.IMM_HALF;
+							}
+						}
+						pattern |= MATCHPATTERN.IMM_EQDIFF;
+						diffval = inst2.immVal - inst1.immVal;
+						break;
+					}
+					// Not first time, examine if pattern is conserved
+					if (inst1.immVal != 0 && inst2.immVal != 0) {
+						let ratio = inst2.immVal / inst1.immVal;
+						if (ratio == 2 && (pattern | MATCHPATTERN.IMM_DOUBLE)) {
+							break;
+						}
+						if ((ratio == 1 / 2) && (pattern | MATCHPATTERN.IMM_HALF)) {
+							break;
+						}
+					}
+					if (diffval == (inst2.immVal - inst1.immVal)) {
+						break;
+					}
+					// None matched, end here
+					endloop = true;
+					break;
+				case "LD":
+				case "ST":
+				case "LDI":
+				case "STI":
+				case "BR":
+					// Look for equal difference of memory reference
+					break;
+				case "LDR":
+				case "STR":
+					// Look for equal difference
+					if (pattern == MATCHPATTERN.NONE) {
+						pattern = MATCHPATTERN.IMM_EQDIFF;
+						diffval = inst2.immVal - inst1.immVal;
+						break;
+					}
+					// Not first time, examine if pattern is conserved
+					if (diffval == (inst2.immVal - inst1.immVal)) {
+						break;
+					}
+					// None matched, end here
+					endloop = true;
+					break;
+				case "JSR":
+					// Must call the same subroutine
+					if (inst1.jsrTarget != inst2.jsrTarget) {
+						endloop = true;
+					}
+					break;
+				case "NOT":
+				case "JMP":
+				case "JSRR":
+					// Already asserted
+					break;
+				case "TRAP":
+					// Must be the same trap vector
+					if (inst1.immVal != inst2.immVal) {
+						endloop = true;
+					}
+					break;
+			}
+			if (endloop) {
+				break;
+			}
+		}
+		if (repeatedTimes > count) {
+			repeatedTimes = count;
+		}
+	}
+
+	return repeatedTimes;
+}
+
+// Return whether there is an absolute mismatch between two instructions
+function mismatchInInstruction(inst1: Instruction, inst2: Instruction) {
+	if (inst1.optype != inst2.optype) {
+		return true;
+	}
+	if (!isNaN(inst1.src) && (inst1.src != inst2.src)) {
+		return true;
+	}
+	if (!isNaN(inst1.src2) && (inst1.src2 != inst2.src2)) {
+		return true;
+	}
+	if (!isNaN(inst1.dest) && (inst1.dest != inst2.dest)) {
+		return true;
+	}
+	return false;
 }
 
 // Check for always BR and redundant conditions (Warning)
@@ -457,21 +637,21 @@ function checkUncalledSubroutines(diagnosticInfo: DiagnosticInfo, code: Code) {
 // Check for oversized PCoffset(Error)
 // Return: the label index in code.labels array. -1 if not found, -2 if hardcoded offset.
 function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction, code: Code, offsetnumber: number): number {
-	let i;
+	let i: number;
 	let max = 1 << offsetnumber;
 	// Label name is number
 	if (isLc3Num(instruction.mem)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Hardcoded PCoffset.", instruction.line,
 			"Hardcoding the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
 		return -2;
-	} 
+	}
 	// Check if the label name contains ; at the end
 	else if (diagnosticInfo.settings.version == 'v2' && (instruction.flags & INSTFLAG.endsWithSemicolon)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Label name ends with ;.", instruction.line,
 			"The assembler recognizes trailing ; as part of the label in current version. This is a bug of the assembler, but it will cause your code \
 			not able to compile");
 		return -3;
-	} 
+	}
 	else {
 		// Check if offset is within range
 		for (i = 0; i < code.labels.length; i++) {
@@ -550,7 +730,8 @@ function generateDiagnostic(diagnosticInfo: DiagnosticInfo, severity: Diagnostic
 		tags: tags
 	};
 	// Pass related info
-	if (relatedInfo && hasDiagnosticRelatedInformationCapability) {
+	// if (relatedInfo && hasDiagnosticRelatedInformationCapability) {
+	if (relatedInfo) {
 		diagnostic.relatedInformation = [
 			{
 				location: {
