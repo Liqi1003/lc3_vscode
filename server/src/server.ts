@@ -107,6 +107,7 @@ export interface ExtensionSettings {
   showErrors: boolean;
   showIllegalInstructions: boolean;
   enableSubroutineCheckings: boolean;
+  enableUnrolledLoopChecking: boolean;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
@@ -118,6 +119,7 @@ const defaultSettings: ExtensionSettings = {
   showErrors: true,
   showIllegalInstructions: false,
   enableSubroutineCheckings: true,
+  enableUnrolledLoopChecking: true,
 };
 let globalSettings: ExtensionSettings = defaultSettings;
 

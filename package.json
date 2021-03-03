@@ -75,6 +75,12 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Enables subroutine analysis for calling interfaces, saved registers etc."
+				},
+				"LC3.enableUnrolledLoopChecking": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Enables consecutively repeated code (unrolled loop) analysis. Recommend to turn on."
 				}
 			}
 		}

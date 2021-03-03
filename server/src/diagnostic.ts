@@ -60,7 +60,9 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 	checkRunningIntoData(diagnosticInfo, code);
 
 	// Check for unrolled loop
-	checkUnrolledLoop(diagnosticInfo, code);
+	if(diagnosticInfo.settings.enableUnrolledLoopChecking){
+		checkUnrolledLoop(diagnosticInfo, code);
+	}
 
 	/** Block checking */
 	if (diagnosticInfo.settings.enableSubroutineCheckings) {

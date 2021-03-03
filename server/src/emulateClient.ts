@@ -32,6 +32,7 @@ const defaultSettings: ExtensionSettings = {
 	showErrors: true,
 	showIllegalInstructions: true,
 	enableSubroutineCheckings: true,
+	enableUnrolledLoopChecking: true,
 };
 
 function printDiagnostic(input: string, out: string) {
