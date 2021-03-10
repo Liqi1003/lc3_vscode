@@ -3,7 +3,7 @@
 	"displayName": "LC3",
 	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "1.0.6",
+	"version": "1.0.8",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",
@@ -47,6 +47,7 @@
 					"scope": "resource",
 					"type": "string",
 					"default": "v2",
+					"description": "Versions of LC3 simulator used. Note that this option only changes LEA and TRAP behavior.",
 					"enum": [
 						"v2",
 						"v3"
@@ -70,7 +71,7 @@
 					"default": false,
 					"description": "Controls whether to generate error message when an illegal instruction is present."
 				},
-				"LC3.enableSubroutineCheckings": {
+				"LC3.enableSubroutineChecking": {
 					"scope": "resource",
 					"type": "boolean",
 					"default": true,

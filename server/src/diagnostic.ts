@@ -49,7 +49,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 
 	// Check for unreachable instructions
 	checkUnreachableInstructions(diagnosticInfo, code);
-	if (diagnosticInfo.settings.enableSubroutineCheckings) {
+	if (diagnosticInfo.settings.enableSubroutineChecking) {
 		checkUncalledSubroutines(diagnosticInfo, code);
 	}
 
@@ -60,12 +60,12 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 	checkRunningIntoData(diagnosticInfo, code);
 
 	// Check for unrolled loop
-	if(diagnosticInfo.settings.enableUnrolledLoopChecking){
+	if (diagnosticInfo.settings.enableUnrolledLoopChecking) {
 		checkUnrolledLoop(diagnosticInfo, code);
 	}
 
 	/** Block checking */
-	if (diagnosticInfo.settings.enableSubroutineCheckings) {
+	if (diagnosticInfo.settings.enableSubroutineChecking) {
 		for (let idx = 0; idx < code.basicBlocks.length; idx++) {
 			// Check for code overlap between subroutines and/or main code
 			checkCodeOverlapBB(code.basicBlocks[idx], diagnosticInfo, code);
@@ -106,13 +106,12 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 		// Checking each line of code based on operation type
 		switch (instruction.optype) {
 			case "ADD":
-				if (instruction.immVal >= 16 || (instruction.immVal < -16 && instruction.immValType == '#')) {
-					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Immediate value is out of range.", instruction.line, "");
-				}
-				break;
 			case "AND":
-				if (instruction.immVal >= 16 || instruction.immVal < -16) {
+				if (instruction.immVal >= 32 || instruction.immVal < -16) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Immediate value is out of range.", instruction.line, "");
+				} else if (instruction.immValType == '#' && instruction.immVal >= 16) {
+					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Immediate value is out of range.", instruction.line, 
+					"The maximum positive immediate value allowed is 15 (x000F). The number you put here will be interpreted as a negative number.");
 				}
 				break;
 			case "BR":

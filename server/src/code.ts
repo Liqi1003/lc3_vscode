@@ -189,6 +189,7 @@ export class Code {
         this.labels.push(label);
         break;
       default:
+        instruction.calcMem();
         this.instructions.push(instruction);
         break;
     }
@@ -196,13 +197,13 @@ export class Code {
 
   // Link labels with the instruction at that memory location
   private linkLabels() {
-    // Skip labels and instructions before .ORIG
-    for (let i = 0; i < this.labels.length && this.labels[i].memAddr == 0; i++);
-    for (let i = 0; i < this.instructions.length && this.instructions[i].memAddr == 0; i++);
-
     // Feeling lazy, may revise the structure here
     for (let instruction_idx = 0; instruction_idx < this.instructions.length; instruction_idx++) {
+      // Skip instructions before .ORIG
+      if (this.instructions[instruction_idx].memAddr == 0) { continue; }
       for (let label_idx = 0; label_idx < this.labels.length; label_idx++) {
+        // Skip labels before .ORIG
+        if (this.labels[label_idx].memAddr == 0) { continue; }
         if (this.instructions[instruction_idx].memAddr == this.labels[label_idx].memAddr) {
           this.labels[label_idx].instruction = this.instructions[instruction_idx];
         }

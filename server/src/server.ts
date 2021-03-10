@@ -106,7 +106,7 @@ export interface ExtensionSettings {
   showWarnings: boolean;
   showErrors: boolean;
   showIllegalInstructions: boolean;
-  enableSubroutineCheckings: boolean;
+  enableSubroutineChecking: boolean;
   enableUnrolledLoopChecking: boolean;
 }
 
@@ -118,7 +118,7 @@ const defaultSettings: ExtensionSettings = {
   showWarnings: true,
   showErrors: true,
   showIllegalInstructions: false,
-  enableSubroutineCheckings: true,
+  enableSubroutineChecking: true,
   enableUnrolledLoopChecking: true,
 };
 let globalSettings: ExtensionSettings = defaultSettings;

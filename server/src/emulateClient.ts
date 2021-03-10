@@ -31,7 +31,7 @@ const defaultSettings: ExtensionSettings = {
 	showWarnings: true,
 	showErrors: true,
 	showIllegalInstructions: true,
-	enableSubroutineCheckings: true,
+	enableSubroutineChecking: true,
 	enableUnrolledLoopChecking: true,
 };
 

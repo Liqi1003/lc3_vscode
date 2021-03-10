@@ -42,6 +42,7 @@ export class Instruction {
   public optype: string = "";                          // Operation type
   public memAddr: number = NaN;                        // Memory address
   public mem: string = "";                             // Targeting memory (label name)
+  public destMem: number = NaN;                    // Destination memory address
   public line: number = NaN;                           // Line number
   public src: number = NaN;                            // Source reg1
   public src2: number = NaN;                           // Source reg2
@@ -297,9 +298,6 @@ export class Instruction {
         break;
 
       case ".STRINGZ":
-      case ".STRINGZ\"":
-      case ".STRINGZ\'":
-        this.optype = ".STRINGZ"
         if (instlst.length >= 2) {
           this.mem = inst.slice(".STRINGZ".length).trim();
         } else {
@@ -391,17 +389,23 @@ export class Instruction {
         return true;
       case "LEA":
       case "TRAP":
-
         return true;
       default:
         return false;
     }
   }
 
+  // Calculate destination memory for constant offsets
+  public calcMem() {
+    if (this.mem && isLc3Num(this.mem)) {
+      this.destMem = this.memAddr + 1 + this.parseValue(this.mem);
+    }
+  }
+
   // Helper function to parse values from a string
   // Possible value type: Register, decimal, hexadecimal, binary
   private parseValue(val: string): number {
-    let ret;
+    let ret: number;
     val = val.trim();
     switch (val[0]) {
       case 'R':
