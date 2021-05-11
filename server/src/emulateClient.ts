@@ -65,21 +65,16 @@ function printDiagnostic(input: string, out: string) {
 			let diagnostic = diagnostics[i];
 			// Record number of warnings and errors
 			if (diagnostic.severity == DiagnosticSeverity.Error) err++;
-			let containBR: RegExp = new RegExp("BR", 'i');
-			let containJSR: RegExp = new RegExp("JSR", 'i');
-			if (diagnostic.severity == DiagnosticSeverity.Warning) {
-				war++;
-				if (diagnostic.message == "Unrolled loop." &&
-					diagnostic.relatedInformation &&
-					diagnostic.relatedInformation[0].message.match(containBR) &&
-					!diagnostic.relatedInformation[0].message.match(containJSR)) {
-					loop++;
-				}
-			}
+			if (diagnostic.severity == DiagnosticSeverity.Warning) war++;
 			// Write message into a file
 			ws.write("{");
+			ws.write('"line": "' + diagnostics[i].range.start.line.toString() + '", ');
 			ws.write('"severity": "' + diagnostics[i].severity?.toString() + '", ');
 			ws.write('"message": "' + diagnostics[i].message?.toString() + '"');
+			if (diagnostics[i].relatedInformation && diagnostics[i].message != "Unrolled loop.") {
+				ws.write(', ');
+				ws.write('"relatedInfo": "' + diagnostics[i].relatedInformation[0].message.toString().replace(/\\/g, "\\\\").replace(/\"/g, "\\\"") + '"');
+			}
 			ws.write("}");
 
 			if (i != diagnostics.length - 1) {
@@ -90,8 +85,7 @@ function printDiagnostic(input: string, out: string) {
 
 		ws.write('"Number": {');
 		ws.write('"Errors": ' + err.toString() + ', ');
-		ws.write('"Warnings": ' + war.toString() + ', ');
-		ws.write('"Loops": ' + loop.toString());
+		ws.write('"Warnings": ' + war.toString());
 		ws.write("}}");
 
 		ws.end();
@@ -101,14 +95,14 @@ function printDiagnostic(input: string, out: string) {
 
 }
 
-const dir = "../studentcode/";
+const dir = "./studentcode/";
 readdir(dir, (err, files) => {
 	if (err) {
 		throw err;
 	}
 	files.forEach(file => {
 		if (file.split(".")[1] == "asm") {
-			printDiagnostic("../studentcode/" + file, "../out/" + file.split(".")[0] + ".json");
+			printDiagnostic("./studentcode/" + file, "./out/" + file.split(".")[0] + ".json");
 		}
 	});
 

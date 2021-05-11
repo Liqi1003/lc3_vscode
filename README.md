@@ -17,7 +17,7 @@ For issues and bug reports, please contact qili8@illinois.edu.
 
 ## Syntax highlighting
 
-Syntax highlighting for Opcodes, Registers, Numbers and Strings. The highlighting varies based on your VSCode colorscheme.
+Syntax highlighting for Opcodes, Registers, Numbers and Strings. The highlighting varies based on the VSCode color scheme.
 
 ## Auto Completions of keywords and labels
 
@@ -27,11 +27,11 @@ Also, you can view the example usage of an opcode if you type the opcode and exp
 
 ## Goto Definition
 
-You can quickly navigate to the definition of a label by holding ctrl and then left click on a label.
+You can quickly navigate to the definition of a label by holding Ctrl and then left-click on a label.
 
 ## Static checking on the code
 
-The extension provides a variety of checkings on your code, including:
+The extension provides a variety of checks on your code, including:
 
 ### Illegal instructions
 
@@ -41,7 +41,7 @@ Instructions that are incomplete or illegal generates errors.
 
 ### Immediate values
 
-Ranges of immediate values are checked. If they exceed the limit of the specific instruction, an error is generated. For AND and ADD, an additional checking on whether overflow occurs is performed. A warning is generated when overflow occurs.
+Ranges of immediate values are checked. If they exceed the limit of the specific instruction, an error is generated. For AND and ADD, an additional checking on whether encoding issue occurs is performed. A warning is generated when a positive decimal immediate number is used, but the encoding makes it negative.
 
 ### Control flow
 
@@ -71,7 +71,7 @@ Having multiple labels at the same memory location is not a fatal issue, but it 
 
 If a branch instruction contains redundant condition code, a warning is generated.
 
-If a branch instruction is conditional but the condition is always true, a warning is generated.
+If a branch instruction is conditional, but the condition is always true, a warning is generated.
 
 ### Unreachable instructions in the code
 
@@ -85,7 +85,7 @@ Code that has no effect in the program is grayed out. It is recommended to remov
 
 ### Subroutine analysis
 
-Reports the callee-saved registers in a subroutine if they are laid out as consecutive ST's right after the subroutine label, and consetutive LD's right before RET. Any mismatch of saving and restoring registers is warned.
+Reports the callee-saved registers in a subroutine if they are laid out as consecutive ST's right after the subroutine label, and consecutive LD's right before RET. Any mismatch of saving and restoring registers is warned.
 
 ### Uncalled subroutines
 

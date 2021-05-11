@@ -18,6 +18,8 @@ export class Code {
   public basicBlocks: BasicBlock[] = [];                        // Basic blocks
   public startAddr: number = NaN;                               // Start address marked by .ORIG
   public endAddr: number = NaN;                                 // End address marked by .END
+  public ORIGline: number = NaN;                                // Line number of .ORIG
+  public ENDline: number = NaN;                                 // Line number of .END
   private firstInstrIdx: number = NaN;                          // First instruction index after .ORIG
   private lineNum: number = 0;                                  // Keeps track of current line number
   private memAddr: number = NaN;                                // Keep track of current memory address
@@ -32,11 +34,11 @@ export class Code {
       this.resetStatus();
       this.analyzeCFG();
       this.markSubroutines(text);
-      this.analyzeCode();
+      this.checkReachability();
       this.buildBlocks();
       this.analyzeBlocks();
     }
-    // console.log(this);
+    console.log(this);
   }
 
   // Returns the label at the specified address
@@ -75,7 +77,7 @@ export class Code {
       if (line) {
         // TODO: Might want to rewrite this one
         instruction = new Instruction(line);
-        if(endWithSemicolon) {
+        if (endWithSemicolon) {
           instruction.flags |= INSTFLAG.endsWithSemicolon;
         }
         // Handle .STRINGZ in multiple line manner
@@ -147,9 +149,11 @@ export class Code {
     // Handle .ORIG and .END here
     if (instruction.optype == ".ORIG" && isNaN(this.startAddr)) {
       this.memAddr = instruction.memAddr;
+      this.ORIGline = instruction.line;
       this.startAddr = this.memAddr;
     } else if (instruction.optype == ".END" && isNaN(this.endAddr)) {
       this.endAddr = this.memAddr;
+      this.ENDline = instruction.line;
     } else {
       instruction.memAddr = this.memAddr++;
     }
@@ -214,17 +218,12 @@ export class Code {
   // Build the CFG of the given code
   private analyzeCFG() {
     let instruction: Instruction;
-    let next: Instruction | null;
 
     for (let i = 0; i < this.instructions.length; i++) {
       instruction = this.instructions[i];
       // Skip data
       if (instruction.memAddr == 0 || instruction.isData()) {
         continue;
-      }
-      // Mark the first instruction to be accessiable from start
-      if (instruction.memAddr == this.startAddr) {
-        instruction.incomingArcs = 1;
       }
       // Link instructions
       if (i + 1 < this.instructions.length) {
@@ -251,19 +250,6 @@ export class Code {
         (instruction.optype == "TRAP" && instruction.immVal == TRAPVEC.HALT)) {
         // RET and HALT do not have nextInstruction
         instruction.nextInstruction = null;
-      }
-    }
-
-    for (let i = 0; i < this.instructions.length; i++) {
-      // Next instruction
-      next = this.instructions[i].nextInstruction;
-      if (next) {
-        next.incomingArcs++;
-      }
-      // Branch target
-      next = this.instructions[i].brTarget;
-      if (next) {
-        next.incomingArcs++;
       }
     }
   }
@@ -312,7 +298,7 @@ export class Code {
   }
 
   // Analyze code
-  private analyzeCode() {
+  private checkReachability() {
     let instruction: Instruction;
     // Analyze main code
     if (this.instructions.length > 0 && !isNaN(this.firstInstrIdx)) {
@@ -409,10 +395,10 @@ export class Code {
     let instruction: Instruction;
 
     // Explore the main routine
-    if(isNaN(this.firstInstrIdx)){
+    if (isNaN(this.firstInstrIdx)) {
       return;
     }
-    
+
     bb = this.buildOneBlock(this.instructions[this.firstInstrIdx], this.startAddr);
     this.basicBlocks.push(bb);
 
@@ -451,7 +437,7 @@ export class Code {
     // Get next instruction
     next = cur.nextInstruction;
     while (!cur.endBasicBlock() && cur.brTarget == null && cur.jsrTarget == null &&
-      next && next.incomingArcs == 1) {
+      next) {
       // Push next instruction into this basic block
       bb.pushInstruction(next);
       next.inBlock = bb;

@@ -58,13 +58,13 @@ export class Instruction {
   public nextInstruction: Instruction | null = null;   // Pointer to next instruction
   public brTarget: Instruction | null = null;          // Pointer to BR target
   public jsrTarget: Instruction | null = null;         // Pointer to JSR target
-  public incomingArcs: number = 0;                     // Number of incoming arcs
   public inBlock: BasicBlock | null = null;            // Basic block containing the instruction
   public redundantCC: CC = CC.none;                    // Only valid for BR instructions, indicate which CC is redundant
 
   constructor(inst: string) {
     // Set default values
-    this.rawString = inst;
+    let space: RegExp = new RegExp("[\s\n\r\t]", 'g');
+    this.rawString = inst.replace(space, " ");
 
     // Parse instruction
     let instlst = inst.toUpperCase().split(/(\s|,)/);
@@ -386,6 +386,7 @@ export class Instruction {
       case "LDI":
       case "LDR":
       case "NOT":
+      case "JSR":
         return true;
       case "LEA":
       case "TRAP":
@@ -486,11 +487,11 @@ export class Instruction {
 }
 
 export class Label {
-  public memAddr: number;                        // Memory address
+  public memAddr: number;                         // Memory address
   public name: string;                            // Name of label
   public line: number;                            // Line number
   public instruction: Instruction | null = null;  // Instruction at the same memory address
-  public flags: number;                           // Flags inherited from Instruction
+  public flags: INSTFLAG;                         // Flags inherited from Instruction
 
   constructor(instruction: Instruction) {
     this.memAddr = instruction.memAddr;

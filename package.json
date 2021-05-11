@@ -3,7 +3,7 @@
 	"displayName": "LC3",
 	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "1.0.8",
+	"version": "1.1.0",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",
@@ -93,11 +93,12 @@
 		"postinstall": "cd client && npm install && cd ../server && npm install && cd .."
 	},
 	"devDependencies": {
-		"@types/mocha": "^8.0.3",
-		"mocha": "^8.1.1",
-		"@types/node": "^12.12.0",
-		"eslint": "^6.4.0",
+		"@types/mocha": "^8.2.1",
+		"@types/node": "^12.20.5",
 		"@typescript-eslint/parser": "^2.3.0",
-		"typescript": "^3.9.4"
-	}
+		"eslint": "^6.4.0",
+		"mocha": "^8.3.1",
+		"typescript": "^3.9.9"
+	},
+	"dependencies": {}
 }
