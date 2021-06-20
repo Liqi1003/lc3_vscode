@@ -52,7 +52,7 @@ function printDiagnostic(input: string, out: string) {
 	rs.on("data", (data) => {
 		textdocument = data.toString();
 		const code: Code = new Code(data.toString());
-		let war: number = 0, err: number = 0, loop: number = 0;
+		let war: number = 0, err: number = 0, unn: number = 0;
 		diagnosticInfo = {
 			textDocument: textdocument,
 			diagnostics: diagnostics,
@@ -66,6 +66,7 @@ function printDiagnostic(input: string, out: string) {
 			// Record number of warnings and errors
 			if (diagnostic.severity == DiagnosticSeverity.Error) err++;
 			if (diagnostic.severity == DiagnosticSeverity.Warning) war++;
+			if (diagnostic.severity == DiagnosticSeverity.Hint) unn++;
 			// Write message into a file
 			ws.write("{");
 			ws.write('"line": "' + diagnostics[i].range.start.line.toString() + '", ');
@@ -85,7 +86,8 @@ function printDiagnostic(input: string, out: string) {
 
 		ws.write('"Number": {');
 		ws.write('"Errors": ' + err.toString() + ', ');
-		ws.write('"Warnings": ' + war.toString());
+		ws.write('"Warnings": ' + war.toString() + ',');
+		ws.write('"Unnecessary": ' + unn.toString())
 		ws.write("}}");
 
 		ws.end();

@@ -38,7 +38,7 @@ export class Code {
       this.buildBlocks();
       this.analyzeBlocks();
     }
-    console.log(this);
+    // console.log(this);
   }
 
   // Returns the label at the specified address

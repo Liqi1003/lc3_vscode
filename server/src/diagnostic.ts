@@ -678,15 +678,13 @@ function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction,
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Hardcoded PCoffset.", instruction.line,
 			"Hardcoding the relative offset is error-prone and not recommended. Try to add labels and use label names instead.");
 		return -2;
-	}
-	// Check if the label name contains ; at the end
-	else if (diagnosticInfo.settings.version == 'v2' && (instruction.flags & INSTFLAG.endsWithSemicolon)) {
+	} else if (diagnosticInfo.settings.version == 'v2' && (instruction.flags & INSTFLAG.endsWithSemicolon)) {
+		// Check if the label name contains ; at the end
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "Label name ends with ;.", instruction.line,
 			"The assembler recognizes trailing ; as part of the label in current version. This is a bug of the assembler, but it will cause your code \
 not able to compile");
 		return -3;
-	}
-	else {
+	} else {
 		// Check if offset is within range
 		for (i = 0; i < code.labels.length; i++) {
 			if (code.labels[i].name == instruction.mem) {
