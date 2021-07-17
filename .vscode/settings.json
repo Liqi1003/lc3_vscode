@@ -5,8 +5,4 @@
 	"editor.codeActionsOnSave": {
 		"source.fixAll.eslint": true
 	},
-	"workbench.editorAssociations": [{
-		    "viewType": "default",
-		        "filenamePattern": "*.md"
-	}]
 }

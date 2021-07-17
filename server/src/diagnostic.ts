@@ -672,7 +672,7 @@ function checkUncalledSubroutines(diagnosticInfo: DiagnosticInfo, code: Code) {
 // Return: the label index in code.labels array. -1 if not found, -2 if hardcoded offset.
 function checkPCoffset(diagnosticInfo: DiagnosticInfo, instruction: Instruction, code: Code, offsetnumber: number): number {
 	let i: number;
-	let max = 1 << offsetnumber;
+	let max = 1 << (offsetnumber - 1);
 	// Label name is number
 	if (isLc3Num(instruction.mem)) {
 		generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Warning, [], "Hardcoded PCoffset.", instruction.line,
@@ -690,7 +690,7 @@ not able to compile");
 			if (code.labels[i].name == instruction.mem) {
 				if (instruction.memAddr - code.labels[i].memAddr - 1 < -max || instruction.memAddr - code.labels[i].memAddr > max - 1) {
 					generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Error, [], "PCoffset is too large.", instruction.line,
-						"The PCoffset of this instruction(" + (code.labels[i].memAddr - instruction.memAddr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
+						"The PCoffset of this instruction (" + (code.labels[i].memAddr - instruction.memAddr - 1) + ") is outside of the range of PCoffset" + offsetnumber + " [-" + max + ", " + (max - 1) + "].");
 				}
 				break;
 			}
