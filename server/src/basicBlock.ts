@@ -162,7 +162,7 @@ export class BasicBlock {
 				}
 				// Record restored registers
 				this.registers.regs[instruction.dest].flag |= REGFLAG.R;
-				this.registers.regs[instruction.dest].savedMem = instruction.mem;
+				this.registers.regs[instruction.dest].restoredMem = instruction.mem;
 			}
 		}
 	}
@@ -268,6 +268,7 @@ class Register {
 	public status: REGSTAT = REGSTAT.none;
 	public flag: REGFLAG = REGFLAG.none;
 	public savedMem: string = "";
+	public restoredMem: string = "";
 	constructor() { }
 }
 
@@ -296,7 +297,7 @@ class Registers {
 		return arr;
 	}
 
-	public getMem(): Array<string> {
+	public getSavedMem(): Array<string> {
 		let arr: Array<string> = [];
 		for (let i = 0; i < 9; i++) {
 			arr.push(this.regs[i].savedMem);
@@ -304,4 +305,11 @@ class Registers {
 		return arr;
 	}
 
+	public getRestoredMem(): Array<string> {
+		let arr: Array<string> = [];
+		for (let i = 0; i < 9; i++) {
+			arr.push(this.regs[i].restoredMem);
+		}
+		return arr;
+	}
 }

@@ -522,7 +522,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 
 	let flags = bb.registers.getFlags();
 	let status = bb.registers.getStats();
-	let savedMem = bb.registers.getMem();
+	let savedMem = bb.registers.getSavedMem();
 	// Scan through the entry block
 	for (let idx = 0; idx < bb.instructions.length; idx++) {
 		instruction = bb.instructions[idx];
@@ -619,7 +619,7 @@ function checkCalleeSavedRegs(bb: BasicBlock, diagnosticInfo: DiagnosticInfo, co
 	// Check for each exit block
 	for (let idx = 0; idx < bb.exitBlock.length; idx++) {
 		exit = bb.exitBlock[idx];
-		let exitMem = exit.registers.getMem();
+		let exitMem = exit.registers.getRestoredMem();
 
 		ret = exit.instructions[exit.instructions.length - 1];
 		// Mismatch in registers
