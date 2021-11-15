@@ -2,14 +2,15 @@
 
 ## INTRODUCTION
 
-The extension aims to help the students in studying LC3 assembly language.
+The extension aims to help the students in studying LC3 assembly language. 
+It is developed by the teaching stuff, mainly Qi Li, for students taking ECE120/220 at University of Illinois at Urbana Champaign.
 
 The extension is developed based on **Patt And Patel Introduction To Computing Systems 2nd Edition**.
-Note that if you are using another edition of the book, or you are using a different textbook, then you may see some false positive warnings.
+Note that if you are using another edition of the book, or you are using a different textbook, you may see some false positive warnings.
 
 This extension does NOT include any analysis for I/O behavior and several new concepts in the 3rd version of LC3, including interrupts and access control violation.
 
-For issues and bug reports, please contact qili8@illinois.edu.
+**For issues and bug reports, please contact li4246@purdue.edu.**
 
 ***
 
@@ -129,7 +130,7 @@ Enables the detection of consecutively repeated code (unrolled loop).
 
 ## COPYRIGHT
 
-Copyright © 2020 qili8@illinois.edu
+Copyright © 2020 li4246@purdue.edu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

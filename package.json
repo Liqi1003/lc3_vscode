@@ -3,11 +3,12 @@
 	"displayName": "LC3",
 	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "1.1.2",
+	"version": "1.2.0",
+	"icon": "lc3.png",
 	"publisher": "qili",
 	"repository": {
 		"type": "git",
-		"url": "https://github-dev.cs.illinois.edu/qili8/lc3_vscode"
+		"url": "https://github.com/Liqi1003/lc3_vscode.git"
 	},
 	"categories": [
 		"Programming Languages"
@@ -18,13 +19,14 @@
 	"activationEvents": [
 		"onLanguage:lc3"
 	],
-	"main": "./client/out/extension",
+	"main": "./out/client/src/extension",
 	"contributes": {
 		"languages": [
 			{
 				"id": "lc3",
 				"aliases": [
-					"lc3"
+					"lc3",
+					"lc-3"
 				],
 				"extensions": [
 					".asm"
@@ -87,19 +89,19 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -b",
-		"watch": "tsc -b -w",
+		"vscode:prepublish": "npm run esbuild-base -- --minify",
+		"esbuild-base": "esbuild client/src/extension.ts server/src/*.ts --bundle --outdir=out --external:vscode --format=cjs --platform=node",
+		"esbuild": "npm run esbuild-base -- --sourcemap",
+		"esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
 		"postinstall": "cd client && npm install && cd ../server && npm install && cd .."
 	},
 	"devDependencies": {
 		"@types/mocha": "^8.2.1",
 		"@types/node": "^12.20.5",
-		"@typescript-eslint/parser": "^2.3.0",
-		"esbuild": "^0.11.20",
-		"eslint": "^6.4.0",
+		"@typescript-eslint/parser": "^5.3.1",
+		"esbuild": "^0.11.23",
+		"eslint": "^8.2.0",
 		"mocha": "^8.3.1",
 		"typescript": "^3.9.9"
-	},
-	"dependencies": {}
+	}
 }
