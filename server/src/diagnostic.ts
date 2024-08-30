@@ -100,7 +100,7 @@ export function generateDiagnostics(diagnosticInfo: DiagnosticInfo, code: Code) 
 		}
 
 		// Check for dead code
-		if ((instruction.flags & INSTFLAG.isDead)) {
+		if (diagnosticInfo.settings.showDeadCode && (instruction.flags & INSTFLAG.isDead)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Dead code.", instruction.line,
 				"Overwriting the value in R" + instruction.dest + " without using it.");
 		}
@@ -650,7 +650,7 @@ function checkUnreachableInstructions(diagnosticInfo: DiagnosticInfo, code: Code
 	// Check for unreachable code
 	for (let i = 0; i < code.instructions.length; i++) {
 		instruction = code.instructions[i];
-		if (!instruction.isData() && !(instruction.flags & INSTFLAG.isFound)) {
+		if (diagnosticInfo.settings.showUnreachableCode && !instruction.isData() && !(instruction.flags & INSTFLAG.isFound)) {
 			generateDiagnostic(diagnosticInfo, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary], "Code never got executed.", instruction.line, "");
 		}
 	}

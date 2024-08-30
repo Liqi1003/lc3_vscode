@@ -3,7 +3,7 @@
 	"displayName": "LC3",
 	"description": "LC3 language support, including code highlight, static checking and autocompletion",
 	"license": "MIT",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"icon": "lc3.png",
 	"publisher": "qili",
 	"repository": {
@@ -72,6 +72,18 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Controls whether to generate error message when an illegal instruction is present."
+				},
+				"LC3.showUnreachableCode": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": false,
+					"description": "Controls whether to show unreachable code."
+				},
+				"LC3.showDeadCode": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": false,
+					"description": "Controls whether to show dead code."
 				},
 				"LC3.enableSubroutineChecking": {
 					"scope": "resource",

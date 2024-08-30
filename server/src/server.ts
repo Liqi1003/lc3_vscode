@@ -106,6 +106,8 @@ export interface ExtensionSettings {
   showWarnings: boolean;
   showErrors: boolean;
   showIllegalInstructions: boolean;
+  showUnreachableCode: boolean;
+  showDeadCode: boolean;
   enableSubroutineChecking: boolean;
   enableUnrolledLoopChecking: boolean;
 }
@@ -118,6 +120,8 @@ const defaultSettings: ExtensionSettings = {
   showWarnings: true,
   showErrors: true,
   showIllegalInstructions: false,
+  showUnreachableCode: true,
+  showDeadCode: true,
   enableSubroutineChecking: true,
   enableUnrolledLoopChecking: true,
 };
